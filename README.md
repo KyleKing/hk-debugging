@@ -11,6 +11,7 @@ Note: the most recent version of hk may have resolved these issues: https://gith
 
 ## Documentation
 
+- **[SUMMARY.md](SUMMARY.md)** - Executive summary and overview
 - **[QUICK-START.md](QUICK-START.md)** - Quick guide to running tests
 - **[ANALYSIS.md](ANALYSIS.md)** - Comprehensive root cause analysis and recommendations
 - **[TESTING.md](TESTING.md)** - Testing methodology and results tracking
