@@ -51,6 +51,42 @@ Steps:
 4. Commit the staged changes
 5. Check if unstaged changes are preserved
 
+## Test Execution
+
+### Automated Testing
+```bash
+# Run all tests across all branches
+for branch in claude/investigate-hk-issues-016j5oackuXCqWfqLpbBE9Ah test/hk-full-config test/hk-no-stash test/hk-no-fix; do
+    git checkout "$branch"
+    ./test-issue-1.sh > "results-issue1-${branch##*/}.txt" 2>&1
+    ./test-issue-2.sh > "results-issue2-${branch##*/}.txt" 2>&1
+done
+```
+
+### Manual Testing
+See `QUICK-START.md` for detailed instructions.
+
 ## Findings
 
-(To be filled in during testing)
+### Results Template
+
+| Branch | Issue #1 Result | Issue #2 Result | Notes |
+|--------|----------------|----------------|--------|
+| baseline (no hk) | ⬜ Not Tested | ⬜ Not Tested | Pure git behavior |
+| full-config | ⬜ Not Tested | ⬜ Not Tested | Full reference config |
+| no-stash | ⬜ Not Tested | ⬜ Not Tested | Stashing disabled |
+| no-fix | ⬜ Not Tested | ⬜ Not Tested | Auto-fix disabled |
+
+Legend:
+- ✅ Pass - No issue observed
+- 🔴 Fail - Issue reproduced
+- ⚠️  Partial - Issue partially reproduced
+- ⬜ Not Tested
+
+### Detailed Results
+
+(To be filled in during testing - copy output from test scripts here)
+
+### Conclusions
+
+(To be filled in after testing completes)
