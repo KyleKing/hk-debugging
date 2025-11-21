@@ -29,10 +29,13 @@ This repository contains multiple branches with different hk configurations for 
 ## Quick Start
 
 ```bash
-# Install hk if needed
+# 1. Set up test branches locally
+./setup-test-branches.sh
+
+# 2. Install hk if needed
 cargo install hk
 
-# Run tests on all branches
+# 3. Run tests on all branches
 for branch in claude/investigate-hk-issues-016j5oackuXCqWfqLpbBE9Ah test/hk-full-config test/hk-no-stash test/hk-no-fix; do
     git checkout "$branch"
     ./test-issue-1.sh
@@ -41,6 +44,8 @@ done
 ```
 
 See [QUICK-START.md](QUICK-START.md) for detailed instructions.
+
+**Note**: Test branches (`test/*`) are local-only and created by the setup script.
 
 ## Key Findings
 
