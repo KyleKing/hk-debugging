@@ -1,0 +1,2 @@
+This is test file 3.
+It will be modified but not staged.
