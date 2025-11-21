@@ -3,7 +3,10 @@
 ## Prerequisites
 
 ```bash
-# Install hk (if not already installed)
+# 1. Set up test branches (local only)
+./setup-test-branches.sh
+
+# 2. Install hk (if not already installed)
 # Option 1: Using cargo
 cargo install hk
 
@@ -16,6 +19,8 @@ brew install jdx/tap/hk
 # Verify installation
 hk --version
 ```
+
+**Note**: Test branches are local-only due to branch naming restrictions. Use `setup-test-branches.sh` to create them in your local repository.
 
 ## Running Tests
 
