@@ -1,0 +1,2 @@
+This is test file 1.
+It will be used to test deletion behavior.
