@@ -1,0 +1,52 @@
+// HK Configuration for testing exit code behavior
+// This config includes fix steps with different exit code scenarios
+
+amends "package://github.com/jdx/hk/releases/download/v1.15.6/hk@1.15.6#/Config.pkl"
+
+min_hk_version = "1.15.6"
+
+// Define test linters with different exit code behaviors
+local test_linters = new Mapping<String, Step> {
+  // Linter that always fails with exit 1
+  ["always-fail"] {
+    glob = "test-file.txt"
+    check = "exit 1"  // Always fails
+    fix = "exit 1"    // Fix also fails
+  }
+
+  // Linter that modifies file then exits successfully
+  ["modify-and-succeed"] {
+    glob = "test-file-2.txt"
+    check_first = false
+    fix = "echo 'modified by fix' >> {{ files }} && exit 0"
+  }
+
+  // Linter that modifies file then fails
+  ["modify-and-fail"] {
+    glob = "test-file-3.txt"
+    check_first = false
+    fix = "echo 'modified by failing fix' >> {{ files }} && exit 1"
+  }
+
+  // Normal successful check
+  ["always-pass"] {
+    glob = "test-file-4.txt"
+    check = "exit 0"
+  }
+}
+
+// Test different hook configurations
+hooks = new {
+  // Pre-commit with fix enabled and stash enabled
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps = test_linters
+  }
+
+  // Manual fix command
+  ["fix"] {
+    fix = true
+    steps = test_linters
+  }
+}
