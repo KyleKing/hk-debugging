@@ -1,0 +1,356 @@
+# Mise Task Arguments Exploration
+# This file demonstrates various patterns for using task arguments with mise
+# Focus on pytest use cases with coverage and command chaining
+
+# =============================================================================
+# EXAMPLE 1: Basic Argument Pass-Through
+# =============================================================================
+# Usage: mise run test:basic -- tests/test_file.py
+# The arguments after -- are passed directly to pytest
+[tasks."test:basic"]
+description = "Basic test with direct argument pass-through"
+usage = '''
+arg "[paths...]" help="Test paths to run" var=#true
+'''
+run = "pytest $usage_paths"
+
+# =============================================================================
+# EXAMPLE 2: Argument Transformation (--debug → verbose flags)
+# =============================================================================
+# Usage: mise run test:debug --verbose
+# Transforms --verbose into -vvv -x for pytest
+[tasks."test:debug"]
+description = "Test with argument transformation"
+usage = '''
+flag "--verbose" help="Enable verbose output" default=#false
+flag "--fail-fast" help="Stop on first failure" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS=""
+if [ "$usage_verbose" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -vvv"
+fi
+if [ "$usage_fail_fast" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -x"
+fi
+pytest $PYTEST_ARGS
+'''
+
+# =============================================================================
+# EXAMPLE 3: Mixed - Transform + Pass-Through
+# =============================================================================
+# Usage: mise run test:mixed --verbose -- tests/
+# Combines transformed flags with direct path arguments
+[tasks."test:mixed"]
+description = "Mix of transformed flags and pass-through args"
+usage = '''
+flag "--verbose" help="Enable verbose output" default=#false
+flag "--fail-fast" help="Stop on first failure" default=#false
+arg "[paths...]" help="Test paths" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS=""
+if [ "$usage_verbose" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -vvv"
+fi
+if [ "$usage_fail_fast" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -x"
+fi
+pytest $PYTEST_ARGS $usage_paths
+'''
+
+# =============================================================================
+# EXAMPLE 4: Coverage with Arguments
+# =============================================================================
+# Usage: mise run test:coverage --html tests/
+[tasks."test:coverage"]
+description = "Run tests with coverage reporting"
+usage = '''
+flag "--html" help="Generate HTML coverage report" default=#false
+flag "--xml" help="Generate XML coverage report" default=#false
+arg "[paths...]" help="Test paths" var=#true default="tests/"
+'''
+run = '''
+#!/usr/bin/env bash
+COV_ARGS="--cov=."
+if [ "$usage_html" = "true" ]; then
+  COV_ARGS="$COV_ARGS --cov-report=html"
+fi
+if [ "$usage_xml" = "true" ]; then
+  COV_ARGS="$COV_ARGS --cov-report=xml"
+fi
+pytest $COV_ARGS $usage_paths
+'''
+
+# =============================================================================
+# EXAMPLE 5: Multiple Run Commands (Sequential)
+# =============================================================================
+# Usage: mise run test:multi --verbose
+# Demonstrates multiple run commands with shared arguments
+[tasks."test:multi"]
+description = "Multiple sequential commands with shared args"
+usage = '''
+flag "--verbose" help="Enable verbose output" default=#false
+arg "[paths...]" help="Test paths" var=#true default="tests/"
+'''
+run = [
+  "echo 'Running linter first...'",
+  "ruff check $usage_paths",
+  '''
+  PYTEST_ARGS=""
+  if [ "$usage_verbose" = "true" ]; then
+    PYTEST_ARGS="-vvv"
+  fi
+  pytest $PYTEST_ARGS $usage_paths
+  ''',
+  "echo 'Tests completed!'"
+]
+
+# =============================================================================
+# EXAMPLE 6: Complex Pytest Workflow
+# =============================================================================
+# Usage: mise run test:full --verbose --coverage --marker unit
+[tasks."test:full"]
+description = "Full test suite with all options"
+usage = '''
+flag "--verbose" help="Enable verbose output" default=#false
+flag "--fail-fast" help="Stop on first failure" default=#false
+flag "--coverage" help="Run with coverage" default=#false
+flag "--html-report" help="Generate HTML coverage report" default=#false
+flag "--marker <marker>" help="Run tests with specific marker"
+arg "[paths...]" help="Test paths" var=#true default="tests/"
+'''
+run = '''
+#!/usr/bin/env bash
+set -e
+
+PYTEST_ARGS=""
+COV_ARGS=""
+
+# Build pytest arguments
+if [ "$usage_verbose" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -vvv"
+fi
+
+if [ "$usage_fail_fast" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -x"
+fi
+
+if [ -n "$usage_marker" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -m $usage_marker"
+fi
+
+# Build coverage arguments
+if [ "$usage_coverage" = "true" ]; then
+  COV_ARGS="--cov=. --cov-report=term"
+  if [ "$usage_html_report" = "true" ]; then
+    COV_ARGS="$COV_ARGS --cov-report=html"
+  fi
+fi
+
+echo "Running: pytest $PYTEST_ARGS $COV_ARGS $usage_paths"
+pytest $PYTEST_ARGS $COV_ARGS $usage_paths
+'''
+
+# =============================================================================
+# EXAMPLE 7: Choices - Constrained Arguments
+# =============================================================================
+# Usage: mise run test:env --env staging
+[tasks."test:env"]
+description = "Run tests against specific environment"
+usage = '''
+flag "--env <env>" help="Environment to test" default="local" {
+  choices "local" "staging" "production"
+}
+flag "--verbose" help="Verbose output" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS="-v"
+if [ "$usage_verbose" = "true" ]; then
+  PYTEST_ARGS="-vvv"
+fi
+export TEST_ENV=$usage_env
+pytest $PYTEST_ARGS
+'''
+
+# =============================================================================
+# EXAMPLE 8: Counting Flags (-vvv pattern)
+# =============================================================================
+# Usage: mise run test:count -vvv
+# Demonstrates count=#true for verbosity levels
+[tasks."test:count"]
+description = "Test with counting verbosity flag"
+usage = '''
+flag "-v --verbose" help="Increase verbosity (can be repeated)" count=#true
+arg "[paths...]" help="Test paths" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+# Convert count to pytest -v flags
+PYTEST_ARGS=""
+if [ "$usage_verbose" -ge 1 ]; then
+  for i in $(seq 1 $usage_verbose); do
+    PYTEST_ARGS="$PYTEST_ARGS -v"
+  done
+fi
+pytest $PYTEST_ARGS $usage_paths
+'''
+
+# =============================================================================
+# EXAMPLE 9: Environment Variable Integration
+# =============================================================================
+# Usage: PYTEST_ARGS="-x -s" mise run test:env-vars
+[tasks."test:env-vars"]
+description = "Test with environment variable fallback"
+usage = '''
+flag "--args <args>" help="Additional pytest arguments" env="PYTEST_ARGS"
+arg "[paths...]" help="Test paths" var=#true default="tests/"
+'''
+run = "pytest $usage_args $usage_paths"
+
+# =============================================================================
+# EXAMPLE 10: Required Arguments with Validation
+# =============================================================================
+# Usage: mise run test:required tests/unit/
+[tasks."test:required"]
+description = "Test with required path argument"
+usage = '''
+arg "<path>" help="Required test path to run"
+flag "--coverage" help="Run with coverage" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+if [ "$usage_coverage" = "true" ]; then
+  pytest --cov=. "$usage_path"
+else
+  pytest "$usage_path"
+fi
+'''
+
+# =============================================================================
+# EXAMPLE 11: Negatable Flags
+# =============================================================================
+# Usage: mise run test:negate --no-cache
+[tasks."test:negate"]
+description = "Test with negatable cache flag"
+usage = '''
+flag "--cache" help="Use pytest cache" negate="--no-cache" default=#true
+arg "[paths...]" help="Test paths" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS=""
+if [ "$usage_cache" = "false" ]; then
+  PYTEST_ARGS="--cache-clear"
+fi
+pytest $PYTEST_ARGS $usage_paths
+'''
+
+# =============================================================================
+# EXAMPLE 12: Complex Multi-Stage Pipeline
+# =============================================================================
+# Usage: mise run test:pipeline --stage all --verbose
+[tasks."test:pipeline"]
+description = "Multi-stage test pipeline with coverage and reporting"
+usage = '''
+flag "--stage <stage>" help="Pipeline stage to run" default="all" {
+  choices "lint" "test" "coverage" "all"
+}
+flag "--verbose" help="Verbose output" default=#false
+flag "--fail-fast" help="Stop on first failure" default=#false
+'''
+run = [
+  '''
+  if [ "$usage_stage" = "lint" ] || [ "$usage_stage" = "all" ]; then
+    echo "=== Running linter ==="
+    ruff check .
+  fi
+  ''',
+  '''
+  if [ "$usage_stage" = "test" ] || [ "$usage_stage" = "all" ]; then
+    echo "=== Running tests ==="
+    PYTEST_ARGS="-v"
+    if [ "$usage_verbose" = "true" ]; then
+      PYTEST_ARGS="-vvv"
+    fi
+    if [ "$usage_fail_fast" = "true" ]; then
+      PYTEST_ARGS="$PYTEST_ARGS -x"
+    fi
+    pytest $PYTEST_ARGS
+  fi
+  ''',
+  '''
+  if [ "$usage_stage" = "coverage" ] || [ "$usage_stage" = "all" ]; then
+    echo "=== Running coverage ==="
+    pytest --cov=. --cov-report=term --cov-report=html
+  fi
+  '''
+]
+
+# =============================================================================
+# EXAMPLE 13: Variadic with Min/Max Constraints
+# =============================================================================
+# Usage: mise run test:variadic file1.py file2.py file3.py
+[tasks."test:variadic"]
+description = "Test with constrained variadic arguments"
+usage = '''
+arg "<files...>" help="Test files to run (1-5 files)" var=#true var_min=1 var_max=5
+flag "--verbose" help="Verbose output" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS="-v"
+if [ "$usage_verbose" = "true" ]; then
+  PYTEST_ARGS="-vvv"
+fi
+pytest $PYTEST_ARGS $usage_files
+'''
+
+# =============================================================================
+# EXAMPLE 14: Global Flags (if using subcommands)
+# =============================================================================
+# Note: This example shows the pattern, though mise tasks don't truly support
+# nested subcommands like traditional CLIs
+[tasks."test:global"]
+description = "Demonstration of global flag pattern"
+usage = '''
+flag "--color" help="Colorize output" global=#true default=#true negate="--no-color"
+flag "--verbose" help="Verbose output" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS=""
+if [ "$usage_color" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS --color=yes"
+else
+  PYTEST_ARGS="$PYTEST_ARGS --color=no"
+fi
+if [ "$usage_verbose" = "true" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS -vvv"
+fi
+pytest $PYTEST_ARGS
+'''
+
+# =============================================================================
+# EXAMPLE 15: Conditional Requirements
+# =============================================================================
+# Usage: mise run test:conditional --output-dir /tmp/reports --format html
+[tasks."test:conditional"]
+description = "Test with conditional required arguments"
+usage = '''
+flag "--format <format>" help="Report format" {
+  choices "html" "xml" "json"
+}
+flag "--output-dir <dir>" help="Output directory (required if format is set)" required_if="--format"
+'''
+run = '''
+#!/usr/bin/env bash
+PYTEST_ARGS="--cov=."
+if [ -n "$usage_format" ]; then
+  PYTEST_ARGS="$PYTEST_ARGS --cov-report=$usage_format:$usage_output_dir"
+fi
+pytest $PYTEST_ARGS
+'''
