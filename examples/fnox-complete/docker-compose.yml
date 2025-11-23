@@ -1,0 +1,130 @@
+version: '3.8'
+
+# Complete local development environment with LocalStack
+# Emulates AWS services locally for development
+
+services:
+  # =============================================================================
+  # LocalStack - Local AWS service emulation
+  # =============================================================================
+  localstack:
+    container_name: localstack-main
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway (all services)
+      - "4510-4559:4510-4559"  # External service port range
+    environment:
+      # Services to enable
+      - SERVICES=secretsmanager,kms,s3,dynamodb,sqs,sns
+
+      # Debug settings
+      - DEBUG=1
+      - LS_LOG=info
+
+      # Persistence
+      - DATA_DIR=/tmp/localstack/data
+      - PERSISTENCE=1
+
+      # AWS defaults (LocalStack convention)
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+
+      # LocalStack configuration
+      - EDGE_PORT=4566
+      - HOSTNAME=localhost
+      - HOSTNAME_EXTERNAL=localhost
+
+      # Feature flags
+      - DISABLE_CORS_CHECKS=1
+      - DISABLE_CUSTOM_CORS_S3=0
+      - DISABLE_CUSTOM_CORS_APIGATEWAY=0
+
+    volumes:
+      # Persist LocalStack data across restarts
+      - "./localstack-data:/tmp/localstack"
+
+      # Mount Docker socket (required for some services)
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+      # Mount init scripts (executed on startup)
+      - "./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh"
+
+    networks:
+      - app-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # =============================================================================
+  # PostgreSQL - Local database
+  # =============================================================================
+  postgres:
+    container_name: postgres-dev
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=dev
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Redis - Caching and session storage
+  # =============================================================================
+  redis:
+    container_name: redis-dev
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # MailHog - Local email testing (SMTP server)
+  # =============================================================================
+  mailhog:
+    container_name: mailhog-dev
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local

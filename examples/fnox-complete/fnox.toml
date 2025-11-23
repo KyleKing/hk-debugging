@@ -1,0 +1,466 @@
+# fnox Configuration Example
+# This demonstrates a complete setup with multiple profiles for different environments
+
+# Global settings
+if_missing = "warn"  # Default behavior when secrets are missing
+
+# =============================================================================
+# PROVIDERS - Define where secrets are stored/encrypted
+# =============================================================================
+
+[providers]
+# Age encryption for development (encrypted in git, shared with team)
+age = {
+    type = "age",
+    recipients = [
+        # Add your team members' public keys here
+        # Each developer generates: age-keygen -o ~/.config/fnox/age.key
+        # Then shares their public key: cat ~/.config/fnox/age.key | grep "public key"
+        # "age1qqpqmq5xz7...xyz",  # Developer 1
+        # "age1aabbccdd...abc",    # Developer 2
+    ]
+}
+
+# LocalStack for fully local AWS service emulation
+localstack = {
+    type = "aws-sm",
+    region = "us-east-1",
+    prefix = "myapp/local/",
+    endpoint = "http://localhost:4566"  # LocalStack endpoint
+}
+
+# =============================================================================
+# SECRETS - Default configuration (used when no profile specified)
+# =============================================================================
+
+[secrets]
+# Database configuration (default: use LocalStack)
+DATABASE_URL = {
+    provider = "localstack",
+    value = "database-url",
+    description = "PostgreSQL connection string",
+    if_missing = "error"  # Critical - app won't work without this
+}
+
+DATABASE_POOL_MIN = {
+    default = "2",
+    description = "Minimum database connection pool size"
+}
+
+DATABASE_POOL_MAX = {
+    default = "10",
+    description = "Maximum database connection pool size"
+}
+
+# AWS Configuration (default: LocalStack)
+AWS_REGION = {
+    default = "us-east-1",
+    description = "AWS region for all services"
+}
+
+AWS_S3_BUCKET = {
+    provider = "localstack",
+    value = "s3-bucket-name",
+    description = "S3 bucket for file uploads"
+}
+
+AWS_ACCESS_KEY_ID = {
+    default = "test",  # LocalStack default
+    description = "AWS access key (LocalStack uses 'test')"
+}
+
+AWS_SECRET_ACCESS_KEY = {
+    default = "test",  # LocalStack default
+    description = "AWS secret key (LocalStack uses 'test')"
+}
+
+# External API Keys (default: development/test keys)
+STRIPE_SECRET_KEY = {
+    provider = "localstack",
+    value = "stripe-key",
+    description = "Stripe API secret key"
+}
+
+SENDGRID_API_KEY = {
+    provider = "localstack",
+    value = "sendgrid-key",
+    description = "SendGrid API key for email"
+}
+
+# Application secrets
+JWT_SECRET = {
+    provider = "localstack",
+    value = "jwt-secret",
+    description = "Secret for signing JWT tokens",
+    if_missing = "error"
+}
+
+SESSION_SECRET = {
+    provider = "localstack",
+    value = "session-secret",
+    description = "Secret for signing session cookies",
+    if_missing = "error"
+}
+
+# Feature flags
+ENABLE_ANALYTICS = {
+    default = "false",
+    description = "Enable analytics tracking"
+}
+
+ENABLE_DEBUG_LOGGING = {
+    default = "true",
+    description = "Enable debug-level logging"
+}
+
+# =============================================================================
+# PROFILE: development-age
+# Alternative development setup using age encryption instead of LocalStack
+# =============================================================================
+
+[profiles.development-age]
+description = "Development with age-encrypted secrets (no LocalStack required)"
+
+[profiles.development-age.secrets]
+DATABASE_URL = {
+    provider = "age",
+    value = "",  # Set with: fnox set DATABASE_URL "postgresql://..." --provider age
+    description = "Local PostgreSQL connection"
+}
+
+AWS_S3_BUCKET = {
+    default = "local-dev-bucket",
+    description = "Local S3 bucket name (for development)"
+}
+
+STRIPE_SECRET_KEY = {
+    provider = "age",
+    value = "",  # Use test key: sk_test_...
+    description = "Stripe test key"
+}
+
+SENDGRID_API_KEY = {
+    provider = "age",
+    value = "",
+    description = "SendGrid test key (or use LocalSMTP)"
+}
+
+JWT_SECRET = {
+    provider = "age",
+    value = "",  # Generate: openssl rand -base64 32
+    description = "JWT signing secret"
+}
+
+SESSION_SECRET = {
+    provider = "age",
+    value = "",  # Generate: openssl rand -base64 32
+    description = "Session signing secret"
+}
+
+# =============================================================================
+# PROFILE: staging
+# Staging environment - mix of age encryption and AWS Secrets Manager
+# =============================================================================
+
+[profiles.staging]
+description = "Staging environment"
+
+[profiles.staging.providers]
+# Age for most secrets
+age = {
+    type = "age",
+    recipients = [
+        # Same recipients as development
+    ]
+}
+
+# AWS Secrets Manager for sensitive staging secrets
+aws-staging = {
+    type = "aws-sm",
+    region = "us-east-1",
+    prefix = "myapp/staging/"
+}
+
+[profiles.staging.secrets]
+DATABASE_URL = {
+    provider = "aws-staging",
+    value = "database-url",
+    description = "Staging PostgreSQL RDS connection",
+    if_missing = "error"
+}
+
+AWS_S3_BUCKET = {
+    provider = "aws-staging",
+    value = "s3-bucket-name",
+    description = "Staging S3 bucket"
+}
+
+AWS_ACCESS_KEY_ID = {
+    provider = "aws-staging",
+    value = "s3-access-key-id",
+    description = "IAM key for S3 access"
+}
+
+AWS_SECRET_ACCESS_KEY = {
+    provider = "aws-staging",
+    value = "s3-secret-key",
+    description = "IAM secret for S3 access"
+}
+
+STRIPE_SECRET_KEY = {
+    provider = "age",
+    value = "",  # Still use test key in staging
+    description = "Stripe test key for staging"
+}
+
+SENDGRID_API_KEY = {
+    provider = "aws-staging",
+    value = "sendgrid-key",
+    description = "SendGrid API key for staging emails"
+}
+
+JWT_SECRET = {
+    provider = "aws-staging",
+    value = "jwt-secret",
+    description = "JWT signing secret for staging",
+    if_missing = "error"
+}
+
+SESSION_SECRET = {
+    provider = "aws-staging",
+    value = "session-secret",
+    description = "Session signing secret",
+    if_missing = "error"
+}
+
+ENABLE_ANALYTICS = {
+    default = "true",
+    description = "Enable analytics in staging"
+}
+
+ENABLE_DEBUG_LOGGING = {
+    default = "false",
+    description = "Disable debug logging in staging"
+}
+
+# =============================================================================
+# PROFILE: production
+# Production environment - all secrets in AWS Secrets Manager
+# =============================================================================
+
+[profiles.production]
+description = "Production environment - all secrets from AWS Secrets Manager"
+
+[profiles.production.providers]
+aws = {
+    type = "aws-sm",
+    region = "us-east-1",
+    prefix = "myapp/prod/"
+}
+
+[profiles.production.secrets]
+DATABASE_URL = {
+    provider = "aws",
+    value = "database-url",
+    description = "Production PostgreSQL RDS connection",
+    if_missing = "error"
+}
+
+DATABASE_POOL_MIN = {
+    provider = "aws",
+    value = "pool-min",
+    description = "Production min pool size"
+}
+
+DATABASE_POOL_MAX = {
+    provider = "aws",
+    value = "pool-max",
+    description = "Production max pool size"
+}
+
+AWS_S3_BUCKET = {
+    provider = "aws",
+    value = "s3-bucket-name",
+    description = "Production S3 bucket"
+}
+
+AWS_ACCESS_KEY_ID = {
+    provider = "aws",
+    value = "s3-access-key-id",
+    description = "IAM key for production S3"
+}
+
+AWS_SECRET_ACCESS_KEY = {
+    provider = "aws",
+    value = "s3-secret-key",
+    description = "IAM secret for production S3"
+}
+
+STRIPE_SECRET_KEY = {
+    provider = "aws",
+    value = "stripe-secret-key",
+    description = "Stripe LIVE secret key",
+    if_missing = "error"
+}
+
+SENDGRID_API_KEY = {
+    provider = "aws",
+    value = "sendgrid-api-key",
+    description = "SendGrid production API key",
+    if_missing = "error"
+}
+
+JWT_SECRET = {
+    provider = "aws",
+    value = "jwt-secret",
+    description = "Production JWT signing secret",
+    if_missing = "error"
+}
+
+SESSION_SECRET = {
+    provider = "aws",
+    value = "session-secret",
+    description = "Production session secret",
+    if_missing = "error"
+}
+
+ENABLE_ANALYTICS = {
+    default = "true",
+    description = "Enable analytics in production"
+}
+
+ENABLE_DEBUG_LOGGING = {
+    default = "false",
+    description = "Disable debug logging in production"
+}
+
+# =============================================================================
+# PROFILE: ci
+# CI/CD environment - age-encrypted secrets from repository
+# =============================================================================
+
+[profiles.ci]
+description = "CI/CD environment (GitHub Actions, GitLab CI, etc.)"
+
+[profiles.ci.providers]
+age = {
+    type = "age",
+    recipients = [
+        # CI age key stored in CI/CD secrets
+    ]
+}
+
+[profiles.ci.secrets]
+# Test database (ephemeral)
+DATABASE_URL = {
+    default = "postgresql://postgres:postgres@localhost:5432/test",
+    description = "Test database for CI"
+}
+
+# AWS credentials for integration tests
+AWS_ACCESS_KEY_ID = {
+    provider = "age",
+    value = "",  # Test account credentials
+    description = "AWS test account key"
+}
+
+AWS_SECRET_ACCESS_KEY = {
+    provider = "age",
+    value = "",
+    description = "AWS test account secret"
+}
+
+AWS_S3_BUCKET = {
+    default = "ci-test-bucket",
+    description = "S3 bucket for CI tests"
+}
+
+# Test API keys
+STRIPE_SECRET_KEY = {
+    provider = "age",
+    value = "",  # Stripe test key
+    description = "Stripe test key for CI"
+}
+
+SENDGRID_API_KEY = {
+    default = "SG.test",  # Fake key for CI
+    description = "Fake SendGrid key (CI doesn't send emails)"
+}
+
+JWT_SECRET = {
+    default = "test-jwt-secret-not-for-production",
+    description = "Test JWT secret"
+}
+
+SESSION_SECRET = {
+    default = "test-session-secret-not-for-production",
+    description = "Test session secret"
+}
+
+ENABLE_ANALYTICS = {
+    default = "false",
+    description = "Disable analytics in CI"
+}
+
+ENABLE_DEBUG_LOGGING = {
+    default = "true",
+    description = "Enable debug logging in CI"
+}
+
+# =============================================================================
+# PROFILE: hybrid-prod-s3
+# Hybrid setup: local database + production S3
+# Useful for debugging production S3 issues locally
+# =============================================================================
+
+[profiles.hybrid-prod-s3]
+description = "Local development with production S3 access"
+
+[profiles.hybrid-prod-s3.providers]
+aws = {
+    type = "aws-sm",
+    region = "us-east-1",
+    prefix = "myapp/prod/"
+}
+
+[profiles.hybrid-prod-s3.secrets]
+# Local database
+DATABASE_URL = {
+    default = "postgresql://postgres:postgres@localhost:5432/dev",
+    description = "Local database"
+}
+
+# Production S3 (READ-ONLY credentials recommended)
+AWS_S3_BUCKET = {
+    provider = "aws",
+    value = "s3-bucket-name",
+    description = "Production S3 bucket (use read-only IAM key!)"
+}
+
+AWS_ACCESS_KEY_ID = {
+    provider = "aws",
+    value = "s3-readonly-key-id",
+    description = "Read-only IAM key for production S3"
+}
+
+AWS_SECRET_ACCESS_KEY = {
+    provider = "aws",
+    value = "s3-readonly-secret",
+    description = "Read-only IAM secret"
+}
+
+# Local/test keys for other services
+STRIPE_SECRET_KEY = {
+    default = "sk_test_local",
+    description = "Test Stripe key"
+}
+
+JWT_SECRET = {
+    default = "local-jwt-secret",
+    description = "Local JWT secret"
+}
+
+SESSION_SECRET = {
+    default = "local-session-secret",
+    description = "Local session secret"
+}

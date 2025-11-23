@@ -1,0 +1,630 @@
+# fnox Configuration for Multi-Service Credential Management
+# Manages credentials for Pulumi, Slack, GitHub, and other services
+# AWS credentials are handled via AWS SSO (not in fnox)
+
+# Global settings
+if_missing = "error"  # Fail if secrets are missing (strict mode)
+
+# =============================================================================
+# PROVIDERS - Define where secrets are stored
+# =============================================================================
+
+[providers]
+# 1Password for all non-AWS secrets
+onepassword = { type = "1password" }
+
+# Note: AWS credentials NOT managed by fnox
+# Developers use AWS SSO: aws sso login --profile my-dev
+# CI/CD uses OIDC: aws-actions/configure-aws-credentials@v4
+
+# =============================================================================
+# SECRETS - Default/Development Configuration
+# =============================================================================
+
+[secrets]
+# -----------------------------------------------------------------------------
+# Pulumi Configuration
+# -----------------------------------------------------------------------------
+
+PULUMI_ACCESS_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Development/Pulumi/access-token",
+    description = "Pulumi Cloud API token for state management",
+    if_missing = "error"  # Critical - Pulumi won't work without this
+}
+
+PULUMI_BACKEND_URL = {
+    default = "https://api.pulumi.com",
+    description = "Pulumi backend URL (cloud or self-hosted)"
+}
+
+# -----------------------------------------------------------------------------
+# Slack Integration
+# -----------------------------------------------------------------------------
+
+SLACK_WEBHOOK_URL = {
+    provider = "onepassword",
+    ref = "op://Development/Slack/webhook-url-general",
+    description = "Slack webhook for #general channel notifications"
+}
+
+SLACK_WEBHOOK_DEPLOYS = {
+    provider = "onepassword",
+    ref = "op://Development/Slack/webhook-url-deploys",
+    description = "Slack webhook for #deploys channel"
+}
+
+SLACK_BOT_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Development/Slack/bot-token",
+    description = "Slack bot OAuth token (xoxb-...)",
+    if_missing = "warn"  # Optional for local development
+}
+
+SLACK_APP_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Development/Slack/app-token",
+    description = "Slack app-level token (xapp-...)",
+    if_missing = "warn"
+}
+
+# -----------------------------------------------------------------------------
+# GitHub Integration
+# -----------------------------------------------------------------------------
+
+GITHUB_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Development/GitHub/personal-access-token",
+    description = "GitHub Personal Access Token for API access",
+    if_missing = "error"
+}
+
+GITHUB_DEPLOY_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/GitHub/deploy-key-private",
+    description = "GitHub deploy key (SSH private key)",
+    if_missing = "warn"
+}
+
+GITHUB_WEBHOOK_SECRET = {
+    provider = "onepassword",
+    ref = "op://Development/GitHub/webhook-secret",
+    description = "Secret for validating GitHub webhook payloads"
+}
+
+# -----------------------------------------------------------------------------
+# External Services
+# -----------------------------------------------------------------------------
+
+# Stripe
+STRIPE_SECRET_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/Stripe/secret-key",
+    description = "Stripe test secret key (sk_test_...)"
+}
+
+STRIPE_PUBLISHABLE_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/Stripe/publishable-key",
+    description = "Stripe test publishable key (pk_test_...)"
+}
+
+STRIPE_WEBHOOK_SECRET = {
+    provider = "onepassword",
+    ref = "op://Development/Stripe/webhook-secret",
+    description = "Stripe webhook signing secret"
+}
+
+# SendGrid
+SENDGRID_API_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/SendGrid/api-key",
+    description = "SendGrid API key for email delivery"
+}
+
+SENDGRID_FROM_EMAIL = {
+    default = "dev@example.com",
+    description = "From email address for development"
+}
+
+# Twilio
+TWILIO_ACCOUNT_SID = {
+    provider = "onepassword",
+    ref = "op://Development/Twilio/account-sid",
+    description = "Twilio Account SID"
+}
+
+TWILIO_AUTH_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Development/Twilio/auth-token",
+    description = "Twilio authentication token"
+}
+
+TWILIO_PHONE_NUMBER = {
+    provider = "onepassword",
+    ref = "op://Development/Twilio/phone-number",
+    description = "Twilio phone number for SMS"
+}
+
+# Datadog
+DATADOG_API_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/Datadog/api-key",
+    description = "Datadog API key for metrics/logs",
+    if_missing = "warn"  # Optional for local dev
+}
+
+DATADOG_APP_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/Datadog/app-key",
+    description = "Datadog application key",
+    if_missing = "warn"
+}
+
+# -----------------------------------------------------------------------------
+# Database and Infrastructure (Non-AWS)
+# -----------------------------------------------------------------------------
+
+# PostgreSQL (local/development)
+DATABASE_URL = {
+    default = "postgresql://postgres:postgres@localhost:5432/dev",
+    description = "PostgreSQL connection string for local development"
+}
+
+DATABASE_POOL_SIZE = {
+    default = "10",
+    description = "Database connection pool size"
+}
+
+# Redis (local/development)
+REDIS_URL = {
+    default = "redis://localhost:6379/0",
+    description = "Redis connection URL"
+}
+
+# MongoDB (if used)
+MONGODB_URI = {
+    provider = "onepassword",
+    ref = "op://Development/MongoDB/connection-uri",
+    description = "MongoDB connection URI",
+    if_missing = "warn"
+}
+
+# -----------------------------------------------------------------------------
+# Application Secrets
+# -----------------------------------------------------------------------------
+
+JWT_SECRET = {
+    provider = "onepassword",
+    ref = "op://Development/Application/jwt-secret",
+    description = "Secret for signing JWT tokens",
+    if_missing = "error"
+}
+
+SESSION_SECRET = {
+    provider = "onepassword",
+    ref = "op://Development/Application/session-secret",
+    description = "Secret for signing session cookies",
+    if_missing = "error"
+}
+
+ENCRYPTION_KEY = {
+    provider = "onepassword",
+    ref = "op://Development/Application/encryption-key",
+    description = "Application-level encryption key",
+    if_missing = "error"
+}
+
+# -----------------------------------------------------------------------------
+# Feature Flags and Configuration
+# -----------------------------------------------------------------------------
+
+ENVIRONMENT = {
+    default = "development",
+    description = "Application environment name"
+}
+
+DEBUG_MODE = {
+    default = "true",
+    description = "Enable debug logging and features"
+}
+
+ENABLE_ANALYTICS = {
+    default = "false",
+    description = "Enable analytics tracking"
+}
+
+ENABLE_SENTRY = {
+    default = "false",
+    description = "Enable Sentry error tracking"
+}
+
+SENTRY_DSN = {
+    provider = "onepassword",
+    ref = "op://Development/Sentry/dsn",
+    description = "Sentry DSN for error tracking",
+    if_missing = "ignore"  # Only needed if ENABLE_SENTRY=true
+}
+
+# =============================================================================
+# PROFILE: staging
+# Staging environment configuration
+# =============================================================================
+
+[profiles.staging]
+description = "Staging environment (pre-production testing)"
+
+[profiles.staging.secrets]
+# Pulumi
+PULUMI_ACCESS_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Staging/Pulumi/access-token",
+    if_missing = "error"
+}
+
+# Slack (staging channel)
+SLACK_WEBHOOK_URL = {
+    provider = "onepassword",
+    ref = "op://Staging/Slack/webhook-url-staging"
+}
+
+SLACK_BOT_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Staging/Slack/bot-token"
+}
+
+# GitHub (use staging deploy token)
+GITHUB_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Staging/GitHub/deploy-token",
+    if_missing = "error"
+}
+
+# External services (still test keys)
+STRIPE_SECRET_KEY = {
+    provider = "onepassword",
+    ref = "op://Staging/Stripe/secret-key"
+}
+
+SENDGRID_API_KEY = {
+    provider = "onepassword",
+    ref = "op://Staging/SendGrid/api-key"
+}
+
+TWILIO_ACCOUNT_SID = {
+    provider = "onepassword",
+    ref = "op://Staging/Twilio/account-sid"
+}
+
+TWILIO_AUTH_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Staging/Twilio/auth-token"
+}
+
+# Database (AWS RDS via AWS SSO credentials)
+DATABASE_URL = {
+    provider = "onepassword",
+    ref = "op://Staging/Database/connection-uri",
+    if_missing = "error"
+}
+
+DATABASE_POOL_SIZE = {
+    default = "20",
+    description = "Larger pool for staging"
+}
+
+# Redis (AWS ElastiCache)
+REDIS_URL = {
+    provider = "onepassword",
+    ref = "op://Staging/Redis/connection-url"
+}
+
+# Application secrets
+JWT_SECRET = {
+    provider = "onepassword",
+    ref = "op://Staging/Application/jwt-secret",
+    if_missing = "error"
+}
+
+SESSION_SECRET = {
+    provider = "onepassword",
+    ref = "op://Staging/Application/session-secret",
+    if_missing = "error"
+}
+
+ENCRYPTION_KEY = {
+    provider = "onepassword",
+    ref = "op://Staging/Application/encryption-key",
+    if_missing = "error"
+}
+
+# Configuration
+ENVIRONMENT = {
+    default = "staging"
+}
+
+DEBUG_MODE = {
+    default = "false"
+}
+
+ENABLE_ANALYTICS = {
+    default = "true"
+}
+
+ENABLE_SENTRY = {
+    default = "true"
+}
+
+SENTRY_DSN = {
+    provider = "onepassword",
+    ref = "op://Staging/Sentry/dsn"
+}
+
+# =============================================================================
+# PROFILE: production
+# Production environment configuration
+# =============================================================================
+
+[profiles.production]
+description = "Production environment (live/customer-facing)"
+
+[profiles.production.secrets]
+# Pulumi
+PULUMI_ACCESS_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Production/Pulumi/access-token",
+    if_missing = "error"
+}
+
+# Slack (production alerts channel)
+SLACK_WEBHOOK_URL = {
+    provider = "onepassword",
+    ref = "op://Production/Slack/webhook-url-alerts"
+}
+
+SLACK_WEBHOOK_DEPLOYS = {
+    provider = "onepassword",
+    ref = "op://Production/Slack/webhook-url-deploys"
+}
+
+SLACK_BOT_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Production/Slack/bot-token"
+}
+
+# GitHub (production deploy token with limited scope)
+GITHUB_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Production/GitHub/deploy-token",
+    if_missing = "error"
+}
+
+# External services (LIVE/PRODUCTION keys)
+STRIPE_SECRET_KEY = {
+    provider = "onepassword",
+    ref = "op://Production/Stripe/secret-key",
+    if_missing = "error"
+}
+
+STRIPE_PUBLISHABLE_KEY = {
+    provider = "onepassword",
+    ref = "op://Production/Stripe/publishable-key",
+    if_missing = "error"
+}
+
+STRIPE_WEBHOOK_SECRET = {
+    provider = "onepassword",
+    ref = "op://Production/Stripe/webhook-secret",
+    if_missing = "error"
+}
+
+SENDGRID_API_KEY = {
+    provider = "onepassword",
+    ref = "op://Production/SendGrid/api-key",
+    if_missing = "error"
+}
+
+SENDGRID_FROM_EMAIL = {
+    default = "noreply@example.com"
+}
+
+TWILIO_ACCOUNT_SID = {
+    provider = "onepassword",
+    ref = "op://Production/Twilio/account-sid",
+    if_missing = "error"
+}
+
+TWILIO_AUTH_TOKEN = {
+    provider = "onepassword",
+    ref = "op://Production/Twilio/auth-token",
+    if_missing = "error"
+}
+
+TWILIO_PHONE_NUMBER = {
+    provider = "onepassword",
+    ref = "op://Production/Twilio/phone-number",
+    if_missing = "error"
+}
+
+# Datadog (production monitoring)
+DATADOG_API_KEY = {
+    provider = "onepassword",
+    ref = "op://Production/Datadog/api-key",
+    if_missing = "error"
+}
+
+DATADOG_APP_KEY = {
+    provider = "onepassword",
+    ref = "op://Production/Datadog/app-key",
+    if_missing = "error"
+}
+
+# Database (AWS RDS)
+DATABASE_URL = {
+    provider = "onepassword",
+    ref = "op://Production/Database/connection-uri",
+    if_missing = "error"
+}
+
+DATABASE_POOL_SIZE = {
+    default = "50",
+    description = "Large pool for production traffic"
+}
+
+# Redis (AWS ElastiCache)
+REDIS_URL = {
+    provider = "onepassword",
+    ref = "op://Production/Redis/connection-url",
+    if_missing = "error"
+}
+
+# MongoDB (if used)
+MONGODB_URI = {
+    provider = "onepassword",
+    ref = "op://Production/MongoDB/connection-uri",
+    if_missing = "error"
+}
+
+# Application secrets
+JWT_SECRET = {
+    provider = "onepassword",
+    ref = "op://Production/Application/jwt-secret",
+    if_missing = "error"
+}
+
+SESSION_SECRET = {
+    provider = "onepassword",
+    ref = "op://Production/Application/session-secret",
+    if_missing = "error"
+}
+
+ENCRYPTION_KEY = {
+    provider = "onepassword",
+    ref = "op://Production/Application/encryption-key",
+    if_missing = "error"
+}
+
+# Configuration
+ENVIRONMENT = {
+    default = "production"
+}
+
+DEBUG_MODE = {
+    default = "false"
+}
+
+ENABLE_ANALYTICS = {
+    default = "true"
+}
+
+ENABLE_SENTRY = {
+    default = "true"
+}
+
+SENTRY_DSN = {
+    provider = "onepassword",
+    ref = "op://Production/Sentry/dsn",
+    if_missing = "error"
+}
+
+# =============================================================================
+# PROFILE: ci
+# CI/CD environment (GitHub Actions, GitLab CI, etc.)
+# =============================================================================
+
+[profiles.ci]
+description = "CI/CD pipelines (automated testing and deployment)"
+
+[profiles.ci.secrets]
+# Pulumi (CI service account)
+PULUMI_ACCESS_TOKEN = {
+    provider = "onepassword",
+    ref = "op://CI-Secrets/Pulumi/access-token",
+    if_missing = "error"
+}
+
+# Slack (CI notifications)
+SLACK_WEBHOOK_URL = {
+    provider = "onepassword",
+    ref = "op://CI-Secrets/Slack/webhook-url-ci"
+}
+
+# GitHub (CI deploy token)
+GITHUB_TOKEN = {
+    provider = "onepassword",
+    ref = "op://CI-Secrets/GitHub/ci-token",
+    if_missing = "error"
+}
+
+# External services (test keys for integration tests)
+STRIPE_SECRET_KEY = {
+    provider = "onepassword",
+    ref = "op://CI-Secrets/Stripe/test-secret-key"
+}
+
+SENDGRID_API_KEY = {
+    default = "SG.test_key",  # Fake key for CI (won't send emails)
+    description = "Fake SendGrid key for testing"
+}
+
+TWILIO_ACCOUNT_SID = {
+    provider = "onepassword",
+    ref = "op://CI-Secrets/Twilio/test-account-sid"
+}
+
+TWILIO_AUTH_TOKEN = {
+    provider = "onepassword",
+    ref = "op://CI-Secrets/Twilio/test-auth-token"
+}
+
+# Database (ephemeral test database)
+DATABASE_URL = {
+    default = "postgresql://postgres:postgres@localhost:5432/test",
+    description = "Local test database for CI"
+}
+
+DATABASE_POOL_SIZE = {
+    default = "5",
+    description = "Small pool for testing"
+}
+
+# Redis (local for testing)
+REDIS_URL = {
+    default = "redis://localhost:6379/15",
+    description = "Local Redis for CI (database 15)"
+}
+
+# Application secrets (test values)
+JWT_SECRET = {
+    default = "test-jwt-secret-not-for-production",
+    description = "Test JWT secret"
+}
+
+SESSION_SECRET = {
+    default = "test-session-secret-not-for-production",
+    description = "Test session secret"
+}
+
+ENCRYPTION_KEY = {
+    default = "test-encryption-key-not-for-production",
+    description = "Test encryption key"
+}
+
+# Configuration
+ENVIRONMENT = {
+    default = "test"
+}
+
+DEBUG_MODE = {
+    default = "true"
+}
+
+ENABLE_ANALYTICS = {
+    default = "false",
+    description = "Disable analytics in CI"
+}
+
+ENABLE_SENTRY = {
+    default = "false",
+    description = "Disable Sentry in CI"
+}

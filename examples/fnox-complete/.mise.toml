@@ -1,0 +1,318 @@
+# mise configuration for fnox integration
+# This demonstrates how to use mise with fnox for automatic secret loading
+
+# =============================================================================
+# Tool Management
+# =============================================================================
+
+[tools]
+# fnox for secrets management
+fnox = "latest"
+
+# Example development tools (customize for your project)
+node = "20"
+python = "3.11"
+# terraform = "1.6"
+# kubectl = "1.28"
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+
+[env]
+# Basic project configuration (non-sensitive)
+NODE_ENV = "development"
+LOG_LEVEL = "debug"
+PORT = "3000"
+
+# Database connection (can be overridden by fnox)
+# DATABASE_URL loaded from fnox
+
+# Indicate LocalStack usage
+LOCALSTACK_ENDPOINT = "http://localhost:4566"
+
+# =============================================================================
+# Tasks (mise run <task-name>)
+# =============================================================================
+
+[tasks.setup]
+description = "Initial project setup"
+run = """
+#!/bin/bash
+set -e
+echo "Setting up project..."
+
+# Check if fnox is initialized
+if [ ! -f fnox.toml ]; then
+    echo "Error: fnox.toml not found. Run 'fnox init' first."
+    exit 1
+fi
+
+# Start LocalStack
+echo "Starting LocalStack..."
+docker-compose up -d localstack postgres redis mailhog
+
+# Wait for services
+echo "Waiting for services to be ready..."
+sleep 5
+
+# Initialize LocalStack secrets (will be done automatically by init script)
+echo "LocalStack will initialize secrets automatically"
+
+echo "✓ Setup complete!"
+echo ""
+echo "Next steps:"
+echo "  1. Run 'mise run dev' to start development server"
+echo "  2. Run 'mise run test' to run tests"
+echo "  3. Visit http://localhost:8025 for MailHog (email testing)"
+"""
+
+[tasks.dev]
+description = "Start development server with LocalStack secrets"
+run = """
+#!/bin/bash
+set -e
+
+# Ensure LocalStack is running
+if ! docker ps | grep -q localstack-main; then
+    echo "Starting LocalStack..."
+    docker-compose up -d
+    sleep 5
+fi
+
+# Export LocalStack AWS credentials
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
+
+# Run app with fnox (default profile uses LocalStack)
+echo "Starting development server with LocalStack secrets..."
+fnox exec -- npm run dev
+"""
+
+[tasks.dev-age]
+description = "Start development server with age-encrypted secrets (no LocalStack)"
+run = """
+#!/bin/bash
+set -e
+echo "Starting development server with age-encrypted secrets..."
+fnox exec --profile development-age -- npm run dev
+"""
+
+[tasks.test]
+description = "Run tests with test secrets"
+run = """
+#!/bin/bash
+set -e
+
+# Use CI profile for testing
+export FNOX_PROFILE=ci
+
+echo "Running tests with CI profile..."
+fnox exec --profile ci -- npm test
+"""
+
+[tasks.staging]
+description = "Run with staging secrets (AWS)"
+run = """
+#!/bin/bash
+set -e
+
+# Verify AWS credentials are configured
+if [ -z "$AWS_PROFILE" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
+    echo "Error: AWS credentials not configured."
+    echo "Set AWS_PROFILE or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
+    exit 1
+fi
+
+echo "Starting with staging secrets from AWS..."
+fnox exec --profile staging -- npm start
+"""
+
+[tasks.prod]
+description = "Run with production secrets (AWS)"
+run = """
+#!/bin/bash
+set -e
+
+# Verify AWS credentials
+if [ -z "$AWS_PROFILE" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
+    echo "Error: AWS credentials not configured for production."
+    exit 1
+fi
+
+# Extra safety check
+read -p "Are you sure you want to run with PRODUCTION secrets? (yes/no) " confirm
+if [ "$confirm" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+fi
+
+echo "Starting with production secrets from AWS..."
+fnox exec --profile production -- npm start
+"""
+
+[tasks.secrets-list]
+description = "List all configured secrets"
+run = "fnox list"
+
+[tasks.secrets-check]
+description = "Verify all secrets are accessible"
+run = """
+#!/bin/bash
+set -e
+
+echo "Checking secrets for default profile..."
+fnox exec -- env | grep -E '(DATABASE_URL|AWS_|STRIPE_|SENDGRID_|JWT_|SESSION_)' || true
+
+echo ""
+echo "Checking secrets for staging profile..."
+fnox exec --profile staging -- env | grep -E '(DATABASE_URL|AWS_|STRIPE_)' || true
+
+echo ""
+echo "Checking secrets for production profile..."
+fnox exec --profile production -- env | grep -E '(DATABASE_URL|AWS_|STRIPE_)' || true
+"""
+
+[tasks.localstack-init]
+description = "Initialize LocalStack with secrets and services"
+run = """
+#!/bin/bash
+set -e
+
+# Start LocalStack if not running
+if ! docker ps | grep -q localstack-main; then
+    echo "Starting LocalStack..."
+    docker-compose up -d localstack
+    sleep 10
+fi
+
+# Run init script
+bash scripts/init-localstack.sh
+"""
+
+[tasks.localstack-status]
+description = "Check LocalStack health and list resources"
+run = """
+#!/bin/bash
+set -e
+
+echo "LocalStack Health:"
+curl -s http://localhost:4566/_localstack/health | jq .
+
+echo ""
+echo "Secrets in Secrets Manager:"
+AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
+    aws --endpoint-url=http://localhost:4566 secretsmanager list-secrets \
+    | jq -r '.SecretList[] | .Name'
+
+echo ""
+echo "S3 Buckets:"
+AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
+    aws --endpoint-url=http://localhost:4566 s3 ls
+"""
+
+[tasks.localstack-stop]
+description = "Stop LocalStack and all services"
+run = "docker-compose down"
+
+[tasks.localstack-clean]
+description = "Stop LocalStack and remove all data"
+run = """
+#!/bin/bash
+set -e
+read -p "This will delete all LocalStack data. Continue? (yes/no) " confirm
+if [ "$confirm" = "yes" ]; then
+    docker-compose down -v
+    rm -rf localstack-data
+    echo "✓ LocalStack data cleaned"
+fi
+"""
+
+[tasks.fnox-init-age]
+description = "Initialize age encryption for development"
+run = """
+#!/bin/bash
+set -e
+
+# Generate age key if it doesn't exist
+if [ ! -f ~/.config/fnox/age.key ]; then
+    echo "Generating age key..."
+    mkdir -p ~/.config/fnox
+    age-keygen -o ~/.config/fnox/age.key
+    chmod 600 ~/.config/fnox/age.key
+    echo "✓ Age key generated"
+else
+    echo "Age key already exists"
+fi
+
+# Display public key
+echo ""
+echo "Your public key (share with team):"
+cat ~/.config/fnox/age.key | grep "public key"
+
+echo ""
+echo "Add this to fnox.toml under [providers.age.recipients]"
+"""
+
+[tasks.fnox-set-dev-secrets]
+description = "Set development secrets using age encryption"
+run = """
+#!/bin/bash
+set -e
+
+echo "Setting development secrets with age encryption..."
+
+# Database
+fnox set DATABASE_URL "postgresql://postgres:postgres@localhost:5432/dev" \
+    --provider age --profile development-age
+
+# API Keys (use test keys!)
+fnox set STRIPE_SECRET_KEY "sk_test_51..." \
+    --provider age --profile development-age
+
+fnox set SENDGRID_API_KEY "SG.test..." \
+    --provider age --profile development-age
+
+# Application secrets
+fnox set JWT_SECRET "$(openssl rand -base64 32)" \
+    --provider age --profile development-age
+
+fnox set SESSION_SECRET "$(openssl rand -base64 32)" \
+    --provider age --profile development-age
+
+echo "✓ Development secrets set!"
+"""
+
+[tasks.install]
+description = "Install project dependencies"
+run = """
+#!/bin/bash
+set -e
+npm install
+# or: pip install -r requirements.txt
+# or: bundle install
+"""
+
+[tasks.clean]
+description = "Clean build artifacts and temp files"
+run = """
+#!/bin/bash
+rm -rf node_modules/.cache
+rm -rf dist/
+rm -rf .next/
+# Add more cleanup as needed
+"""
+
+# =============================================================================
+# Task Aliases
+# =============================================================================
+
+[tasks.start]
+alias = "dev"
+
+[tasks.s]
+alias = "dev"
+
+[tasks.t]
+alias = "test"
