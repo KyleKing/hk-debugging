@@ -1,0 +1,128 @@
+# Comparison: Old vs New approaches for selective tool installation
+
+name: Approach Comparison
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # ❌ OLD APPROACH (Not Recommended)
+  # Using MISE_ENV with environment-specific config
+  old-approach-mise-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with MISE_ENV (old approach)
+        uses: jdx/mise-action@v2
+        with:
+          mise_toml: |
+            [env]
+            MISE_ENV = "ci"
+          cache: true
+
+      # Requires mise.toml to have environment-specific sections
+      # [env]
+      # MISE_ENV = "dev"
+      #
+      # Complex config merging, hard to understand
+
+      - name: Run tests
+        run: echo "Using old MISE_ENV approach"
+
+  # ✅ NEW APPROACH 1 (Recommended)
+  # Using MISE_ENABLE_TOOLS
+  new-approach-enable-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with MISE_ENABLE_TOOLS (recommended)
+        uses: jdx/mise-action@v3
+        env:
+          MISE_ENABLE_TOOLS: "python,node"  # Simple whitelist
+        with:
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Clean, simple, explicit
+      # No complex config files needed
+      # Single source of truth for versions (mise.toml)
+
+      - name: Run tests
+        run: echo "Using MISE_ENABLE_TOOLS approach"
+
+  # ✅ NEW APPROACH 2 (Alternative)
+  # Using install_args for explicit control
+  new-approach-install-args:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with install_args (alternative)
+        uses: jdx/mise-action@v3
+        with:
+          install_args: "python@3.12 node@20"  # Explicit versions
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Self-documenting
+      # Versions visible in workflow
+      # Good for when you need different versions than mise.toml
+
+      - name: Run tests
+        run: echo "Using install_args approach"
+
+  # ✅ NEW APPROACH 3 (For exclusions)
+  # Using MISE_DISABLE_TOOLS
+  new-approach-disable-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with MISE_DISABLE_TOOLS
+        uses: jdx/mise-action@v3
+        env:
+          MISE_DISABLE_TOOLS: "docker,terraform"  # Simple blacklist
+        with:
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Good when you want most tools but need to exclude a few
+      # Clear what's being skipped
+
+      - name: Run tests
+        run: echo "Using MISE_DISABLE_TOOLS approach"
+
+  # Side-by-side comparison
+  comparison-summary:
+    runs-on: ubuntu-latest
+    needs: [new-approach-enable-tools, new-approach-install-args, new-approach-disable-tools]
+    steps:
+      - name: Print summary
+        run: |
+          echo "## Approach Comparison"
+          echo ""
+          echo "### OLD: MISE_ENV"
+          echo "- ❌ Complex config merging"
+          echo "- ❌ Requires environment-specific mise.toml sections"
+          echo "- ❌ Hard to understand and maintain"
+          echo ""
+          echo "### NEW: MISE_ENABLE_TOOLS (Recommended)"
+          echo "- ✅ Simple whitelist"
+          echo "- ✅ No duplicate config files"
+          echo "- ✅ Centralized version management"
+          echo ""
+          echo "### NEW: install_args (Alternative)"
+          echo "- ✅ Explicit and self-documenting"
+          echo "- ✅ Works without mise.toml"
+          echo "- ⚠️  Duplicates version info"
+          echo ""
+          echo "### NEW: MISE_DISABLE_TOOLS (For exclusions)"
+          echo "- ✅ Easy to exclude a few tools"
+          echo "- ✅ Natural for blacklisting"

@@ -1,0 +1,71 @@
+# Example: Using MISE_DISABLE_TOOLS to exclude specific tools
+# Useful when you want most tools but need to skip a few heavy ones
+
+name: CI with MISE_DISABLE_TOOLS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Job 1: Quick checks - exclude slow-to-install tools
+  quick-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise (exclude heavy tools)
+        uses: jdx/mise-action@v3
+        env:
+          # Install all tools EXCEPT docker and terraform
+          # These are heavy and slow to install
+          MISE_DISABLE_TOOLS: "docker,terraform"
+        with:
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run quick tests
+        run: npm run test:quick
+
+  # Job 2: Full test suite - install everything
+  full-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise (all tools)
+        uses: jdx/mise-action@v3
+        with:
+          # No MISE_DISABLE_TOOLS - install everything
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run full test suite
+        run: ./run-all-tests.sh
+
+  # Job 3: PR validation - skip optional tools
+  pr-validation:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise (skip optional tools)
+        uses: jdx/mise-action@v3
+        env:
+          # Skip tools that aren't needed for PR validation
+          MISE_DISABLE_TOOLS: "kubectl,helm,aws-cli"
+        with:
+          cache: true
+          cache_key: "mise-pr-{{platform}}-{{file_hash}}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate PR
+        run: |
+          npm run lint
+          npm run test
+          python -m pytest

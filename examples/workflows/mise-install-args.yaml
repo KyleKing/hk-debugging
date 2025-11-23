@@ -1,0 +1,98 @@
+# Example: Using install_args for explicit tool installation
+# Alternative approach when you want explicit versions in the workflow
+
+name: CI with install_args
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Job 1: Explicit tool versions in workflow
+  test-with-specific-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with explicit versions
+        uses: jdx/mise-action@v3
+        with:
+          # Explicit tool and version specification
+          install_args: "python@3.12 node@20"
+          cache: true
+          cache_key: "mise-{{platform}}-{{install_args_hash}}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tests
+        run: |
+          python --version
+          node --version
+          npm test
+
+  # Job 2: Different versions than mise.toml
+  test-python-3-11:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with Python 3.11
+        uses: jdx/mise-action@v3
+        with:
+          # Override version from mise.toml
+          install_args: "python@3.11"
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test with Python 3.11
+        run: |
+          python --version
+          pytest
+
+  # Job 3: Install tools not in mise.toml
+  test-with-additional-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with additional tools
+        uses: jdx/mise-action@v3
+        with:
+          # Can install tools not defined in mise.toml
+          install_args: "python@3.12 shellcheck@0.9.0 shfmt@3.7.0"
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run shell script validation
+        run: |
+          shellcheck **.sh
+          shfmt -d .
+
+  # Job 4: Matrix with explicit versions
+  matrix-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12"]
+        node: ["18", "20"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with matrix versions
+        uses: jdx/mise-action@v3
+        with:
+          install_args: "python@${{ matrix.python }} node@${{ matrix.node }}"
+          cache: true
+          cache_key: "mise-{{platform}}-py${{ matrix.python }}-node${{ matrix.node }}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tests
+        run: |
+          python --version
+          node --version
+          npm test

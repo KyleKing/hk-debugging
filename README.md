@@ -11,10 +11,17 @@ Note: the most recent version of hk may have resolved these issues: https://gith
 
 ## Documentation
 
+### HouseKeeper (hk) Investigation
+
 - **[SUMMARY.md](SUMMARY.md)** - Executive summary and overview
 - **[QUICK-START.md](QUICK-START.md)** - Quick guide to running tests
 - **[ANALYSIS.md](ANALYSIS.md)** - Comprehensive root cause analysis and recommendations
 - **[TESTING.md](TESTING.md)** - Testing methodology and results tracking
+
+### mise CI Configuration
+
+- **[MISE-CI-PARTIAL-INSTALL.md](MISE-CI-PARTIAL-INSTALL.md)** - Comprehensive guide for selective tool installation in CI
+- **[examples/](examples/)** - Sample workflows and configurations for mise in CI
 
 ## Test Branches
 

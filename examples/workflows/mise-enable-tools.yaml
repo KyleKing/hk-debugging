@@ -1,0 +1,113 @@
+# Example: Using MISE_ENABLE_TOOLS for selective tool installation
+# This is the RECOMMENDED approach for most CI workflows
+
+name: CI with MISE_ENABLE_TOOLS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Job 1: Linting - only needs Node.js
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with Node.js only
+        uses: jdx/mise-action@v3
+        env:
+          MISE_ENABLE_TOOLS: "node"  # Only install Node.js
+        with:
+          cache: true
+          cache_key: "mise-{{platform}}-node-{{file_hash}}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run linter
+        run: npm run lint
+
+  # Job 2: Python tests - only needs Python
+  test-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with Python only
+        uses: jdx/mise-action@v3
+        env:
+          MISE_ENABLE_TOOLS: "python"  # Only install Python
+        with:
+          cache: true
+          cache_key: "mise-{{platform}}-py${{ matrix.python-version }}-{{file_hash}}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: python -m pip install -e .[dev]
+
+      - name: Run tests
+        run: pytest
+
+  # Job 3: Integration tests - needs multiple tools
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with multiple tools
+        uses: jdx/mise-action@v3
+        env:
+          MISE_ENABLE_TOOLS: "python,node,terraform"  # Install multiple tools
+        with:
+          cache: true
+          cache_key: "mise-{{platform}}-integration-{{file_hash}}"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run integration tests
+        run: ./integration-tests.sh
+
+  # Job 4: Documentation build - only needs Python
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with Python only
+        uses: jdx/mise-action@v3
+        env:
+          MISE_ENABLE_TOOLS: "python"
+        with:
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build documentation
+        run: |
+          pip install mkdocs-material
+          mkdocs build
+
+  # Job 5: Security scanning - needs specific tools
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup mise with security tools
+        uses: jdx/mise-action@v3
+        env:
+          MISE_ENABLE_TOOLS: "node,python"
+        with:
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run security scans
+        run: |
+          npm audit
+          pip-audit
