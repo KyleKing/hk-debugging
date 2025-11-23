@@ -1,0 +1,370 @@
+# Root Mise Configuration for Polyglot Monorepo
+# Python + TypeScript Example
+
+[settings]
+experimental_monorepo_root = true
+task.monorepo_respect_gitignore = true
+
+# =============================================================================
+# SHARED TOOLS
+# =============================================================================
+# Tools defined here are available to all child projects
+# Child projects can override with specific versions if needed
+
+[tools]
+# JavaScript/TypeScript ecosystem
+node = "20.11.0"
+
+# Python ecosystem
+python = "3.12.0"
+
+# Additional tools for development
+"cargo:just" = "latest"           # Alternative task runner
+"cargo:cargo-nextest" = "latest"  # Rust test runner (if needed)
+
+# =============================================================================
+# GLOBAL ENVIRONMENT VARIABLES
+# =============================================================================
+
+[env]
+# Project paths
+REPO_ROOT = "{{config_root}}"
+CACHE_DIR = "{{config_root}}/.cache"
+LOG_DIR = "{{config_root}}/logs"
+
+# Global settings
+CI = "${CI:-false}"
+LOG_LEVEL = "${LOG_LEVEL:-info}"
+
+# Git information (dynamic)
+GIT_BRANCH = "{{exec(command='git branch --show-current 2>/dev/null || echo unknown')}}"
+GIT_COMMIT = "{{exec(command='git rev-parse --short HEAD 2>/dev/null || echo unknown')}}"
+VERSION = "{{exec(command='git describe --tags --always 2>/dev/null || echo v0.0.0')}}"
+
+# =============================================================================
+# DIRECTORY ENTRY HOOKS
+# =============================================================================
+
+[hooks]
+enter = '''
+# Create necessary directories
+mkdir -p .cache logs .tmp
+
+# Welcome message
+echo "🚀 Polyglot Monorepo (Python + TypeScript)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Version: $VERSION ($GIT_BRANCH @ $GIT_COMMIT)"
+echo "Environment: ${NODE_ENV:-development}"
+echo ""
+echo "Quick Commands:"
+echo "  mise run dev-all     - Start all services"
+echo "  mise run test-all    - Run all tests"
+echo "  mise run lint-all    - Lint all code"
+echo "  mise run ci          - Full CI pipeline"
+echo "  mise tasks --all     - Show all tasks"
+echo ""
+
+# Create shell aliases
+alias mt="mise run test-all"
+alias mb="mise run build-all"
+alias ml="mise run lint-all"
+alias md="mise run dev-all"
+alias mci="mise run ci"
+alias mclean="mise run clean-all"
+
+# Show if first time
+if [ ! -f .setup-complete ]; then
+  echo "⚠️  First time setup needed:"
+  echo "   Run: mise run install-all"
+  echo ""
+fi
+'''
+
+# =============================================================================
+# ROOT TASKS - Orchestrate Across All Projects
+# =============================================================================
+
+[tasks.install-all]
+description = "Install dependencies for all projects"
+alias = "i"
+run = [
+  "echo '📦 Installing frontend dependencies...'",
+  "mise run //frontend:install",
+  "echo '📦 Installing backend dependencies...'",
+  "mise run //backend:install",
+  "echo '📦 Generating shared code...'",
+  "mise run //shared/proto:generate",
+  "touch .setup-complete",
+  "echo '✅ All dependencies installed!'"
+]
+
+[tasks.dev-all]
+description = "Start all development servers (parallel)"
+alias = "d"
+depends = ["install-all"]
+run = '''
+#!/usr/bin/env bash
+set -e
+
+echo "🚀 Starting all services..."
+
+# Start backend in background
+(cd backend && mise run dev) &
+BACKEND_PID=$!
+
+# Wait for backend to be ready
+echo "⏳ Waiting for backend..."
+sleep 3
+
+# Start frontend in background
+(cd frontend && mise run dev) &
+FRONTEND_PID=$!
+
+echo ""
+echo "✅ Services started:"
+echo "   Frontend: http://localhost:5173"
+echo "   Backend:  http://localhost:8000"
+echo "   API Docs: http://localhost:8000/docs"
+echo ""
+echo "Press Ctrl+C to stop all services"
+
+# Wait for interrupt
+trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null" EXIT
+wait
+'''
+
+[tasks.test-all]
+description = "Run tests for all projects"
+alias = "t"
+depends = ["install-all"]
+run = '''
+#!/usr/bin/env bash
+set -e
+
+echo "🧪 Running all tests..."
+
+# Run tests in parallel
+mise //...:test &
+PIDS=$!
+
+# Wait for all
+wait $PIDS
+
+echo "✅ All tests passed!"
+'''
+
+[tasks.lint-all]
+description = "Lint all projects"
+alias = "l"
+run = [
+  "echo '🔍 Linting all projects...'",
+  "mise //...:lint",
+  "echo '✅ All linting passed!'"
+]
+
+[tasks.format-all]
+description = "Format all code"
+alias = "f"
+run = [
+  "echo '💅 Formatting all code...'",
+  "mise //...:format",
+  "echo '✅ All code formatted!'"
+]
+
+[tasks.typecheck-all]
+description = "Type check all projects"
+alias = "tc"
+run = [
+  "echo '🔍 Type checking all projects...'",
+  "mise //frontend:typecheck",
+  "mise //backend:typecheck",
+  "echo '✅ All type checks passed!'"
+]
+
+[tasks.build-all]
+description = "Build all projects"
+alias = "b"
+depends = ["install-all"]
+run = [
+  "echo '🏗️  Building all projects...'",
+  "mise //frontend:build",
+  "mise //backend:build",
+  "echo '✅ All builds complete!'"
+]
+
+[tasks.clean-all]
+description = "Clean all build artifacts and caches"
+run = [
+  "echo '🧹 Cleaning all projects...'",
+  "mise //...:clean",
+  "rm -rf .cache logs .tmp .setup-complete",
+  "echo '✅ All cleaned!'"
+]
+
+[tasks.ci]
+description = "Full CI pipeline (lint, typecheck, test, build)"
+env = { CI = "true" }
+run = [
+  "echo '🔄 Starting CI pipeline...'",
+  "mise run install-all",
+  "echo ''",
+  "echo '📋 Step 1/4: Linting...'",
+  "mise run lint-all",
+  "echo ''",
+  "echo '📋 Step 2/4: Type checking...'",
+  "mise run typecheck-all",
+  "echo ''",
+  "echo '📋 Step 3/4: Testing...'",
+  "mise run test-all",
+  "echo ''",
+  "echo '📋 Step 4/4: Building...'",
+  "mise run build-all",
+  "echo ''",
+  "echo '✅ CI pipeline complete!'"
+]
+
+# =============================================================================
+# UTILITY TASKS
+# =============================================================================
+
+[tasks.doctor]
+description = "Check project health and configuration"
+run = '''
+#!/usr/bin/env bash
+
+echo "=== Project Health Check ==="
+echo ""
+
+echo "Mise Version:"
+mise --version
+echo ""
+
+echo "Tools:"
+mise list
+echo ""
+
+echo "Git Status:"
+git status --short || echo "Not a git repository"
+echo ""
+
+echo "Projects:"
+find . -name ".mise.toml" -not -path "*/node_modules/*" -not -path "*/.venv/*"
+echo ""
+
+echo "Dependencies:"
+[ -d frontend/node_modules ] && echo "✅ Frontend: Installed" || echo "❌ Frontend: Not installed"
+[ -d backend/.venv ] && echo "✅ Backend: Installed" || echo "❌ Backend: Not installed"
+echo ""
+
+echo "=== Health check complete ==="
+'''
+
+[tasks.stats]
+description = "Show project statistics"
+run = '''
+echo "=== Project Statistics ==="
+echo ""
+echo "Frontend (TypeScript):"
+find frontend/src -name "*.ts" -o -name "*.tsx" | wc -l | xargs echo "  Files:"
+find frontend/src -name "*.ts" -o -name "*.tsx" | xargs wc -l | tail -1 | awk '{print "  Lines: " $1}'
+echo ""
+echo "Backend (Python):"
+find backend/src -name "*.py" | wc -l | xargs echo "  Files:"
+find backend/src -name "*.py" | xargs wc -l | tail -1 | awk '{print "  Lines: " $1}'
+echo ""
+echo "Tests:"
+find . -path "*/tests/*" -name "*.py" -o -name "*.test.ts" | wc -l | xargs echo "  Test files:"
+echo ""
+'''
+
+[tasks.graph]
+description = "Show task dependency graph"
+usage = '''
+arg "[task]" help="Task to show graph for (defaults to ci)"
+'''
+run = 'mise task deps ${usage_task:-ci}'
+
+# =============================================================================
+# DEPLOYMENT TASKS
+# =============================================================================
+
+[tasks.deploy]
+description = "Deploy to specified environment"
+usage = '''
+flag "--env <env>" help="Target environment" default="staging" {
+  choices "dev" "staging" "production"
+}
+flag "--dry-run" help="Show what would be deployed" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+set -e
+
+echo "🚀 Deploying to $usage_env..."
+
+if [ "$usage_dry_run" = "true" ]; then
+  echo "DRY RUN - Would deploy:"
+  echo "  Version: $VERSION"
+  echo "  Environment: $usage_env"
+  echo "  Commit: $GIT_COMMIT"
+else
+  # Run CI first
+  mise run ci
+
+  # Deploy
+  echo "Deploying $VERSION to $usage_env..."
+  # Add actual deployment logic here
+
+  echo "✅ Deployed successfully!"
+fi
+'''
+
+[tasks.release]
+description = "Create a new release"
+usage = '''
+arg "<version>" help="Version to release (e.g., v1.2.3)"
+flag "--dry-run" help="Preview the release" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+set -e
+
+if [ "$usage_dry_run" = "true" ]; then
+  echo "DRY RUN - Would create release:"
+  echo "  Version: $usage_version"
+  echo "  Current: $VERSION"
+else
+  # Run CI
+  mise run ci
+
+  # Create tag
+  git tag -a "$usage_version" -m "Release $usage_version"
+  git push origin "$usage_version"
+
+  echo "✅ Release $usage_version created!"
+fi
+'''
+
+# =============================================================================
+# DEVELOPMENT HELPERS
+# =============================================================================
+
+[tasks.update]
+description = "Update all tools to latest versions"
+run = [
+  "mise upgrade",
+  "mise install",
+  "mise run install-all"
+]
+
+[tasks.reset]
+description = "Reset project to clean state (WARNING: deletes all data)"
+run = '''
+read -p "⚠️  This will delete all dependencies and caches. Continue? (y/N) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  mise run clean-all
+  rm -rf frontend/node_modules backend/.venv .setup-complete
+  echo "✅ Project reset complete. Run 'mise run install-all' to start fresh."
+fi
+'''

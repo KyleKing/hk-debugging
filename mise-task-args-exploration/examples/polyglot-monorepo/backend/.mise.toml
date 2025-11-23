@@ -1,0 +1,359 @@
+# Backend Configuration (Python + FastAPI)
+# Part of Polyglot Monorepo Example
+
+# =============================================================================
+# TOOLS
+# =============================================================================
+
+[tools]
+# Python inherited from root (3.12.0)
+# Override if this project needs a different version:
+# python = "3.11"
+
+# Backend-specific tools
+"pipx:uv" = "latest"           # Fast Python package manager
+"pipx:ruff" = "latest"         # Fast Python linter/formatter
+"pipx:mypy" = "latest"         # Static type checker
+"pipx:pytest" = "latest"       # Test framework
+
+# =============================================================================
+# ENVIRONMENT VARIABLES
+# =============================================================================
+
+[env]
+# Python configuration
+VIRTUAL_ENV = "{{config_root}}/.venv"
+PYTHONPATH = "{{config_root}}/src"
+PATH = ["{{config_root}}/.venv/bin", "$PATH"]
+
+# Application configuration
+APP_ENV = "${APP_ENV:-development}"
+DEBUG = "${DEBUG:-true}"
+LOG_LEVEL = "${LOG_LEVEL:-info}"
+
+# Database configuration
+DATABASE_URL = "${DATABASE_URL:-postgresql://localhost:5432/dev}"
+DATABASE_POOL_SIZE = "10"
+
+# API configuration
+API_HOST = "${API_HOST:-127.0.0.1}"
+API_PORT = "${API_PORT:-8000}"
+API_WORKERS = "${API_WORKERS:-1}"
+CORS_ORIGINS = "${CORS_ORIGINS:-http://localhost:5173}"
+
+# Security
+SECRET_KEY = "${SECRET_KEY:-dev-secret-key-change-in-production}"
+ACCESS_TOKEN_EXPIRE_MINUTES = "60"
+
+# =============================================================================
+# HIDDEN HELPER TASKS
+# =============================================================================
+
+[tasks.":ensure-venv"]
+description = "Ensure virtual environment exists (internal)"
+hide = true
+sources = ["pyproject.toml", "uv.lock"]
+outputs = [".venv/pyvenv.cfg"]
+run = '''
+if [ ! -d ".venv" ]; then
+  echo "📦 Creating virtual environment..."
+  uv venv
+fi
+'''
+
+[tasks.":ensure-deps"]
+description = "Ensure dependencies are installed (internal)"
+hide = true
+depends = [":ensure-venv"]
+sources = ["pyproject.toml", "uv.lock"]
+outputs = [".venv/lib/python*/site-packages"]
+run = '''
+if [ ! -d ".venv/lib" ] || [ pyproject.toml -nt .venv ]; then
+  echo "📦 Installing backend dependencies..."
+  uv sync
+else
+  echo "✅ Backend dependencies up to date"
+fi
+'''
+
+[tasks.":proto-sync"]
+description = "Sync generated protobuf code (internal)"
+hide = true
+depends = ["//shared/proto:generate"]
+run = "echo '✅ Protobuf definitions synced'"
+
+# =============================================================================
+# PUBLIC TASKS
+# =============================================================================
+
+[tasks.install]
+description = "Install backend dependencies"
+alias = "i"
+depends = [":ensure-venv"]
+sources = ["pyproject.toml", "uv.lock"]
+outputs = [".venv/lib/python*/site-packages"]
+run = "uv sync"
+
+[tasks.dev]
+description = "Start development server with hot reload"
+alias = "d"
+depends = [":ensure-deps", ":proto-sync"]
+run = '''
+echo "🚀 Starting backend dev server..."
+echo "   URL: http://${API_HOST}:${API_PORT}"
+echo "   Docs: http://${API_HOST}:${API_PORT}/docs"
+echo "   Environment: ${APP_ENV}"
+echo ""
+uvicorn main:app --reload --host $API_HOST --port $API_PORT
+'''
+
+[tasks.dev-workers]
+description = "Start with multiple workers (for testing production mode)"
+depends = [":ensure-deps"]
+run = "uvicorn main:app --host $API_HOST --port $API_PORT --workers $API_WORKERS"
+
+[tasks.build]
+description = "Build Python wheel"
+alias = "b"
+depends = [":ensure-deps"]
+sources = ["src/**/*.py", "pyproject.toml"]
+outputs = ["dist/*.whl"]
+run = '''
+echo "🏗️  Building backend wheel..."
+uv build
+
+echo ""
+echo "Build complete:"
+ls -lh dist/
+'''
+
+[tasks.test]
+description = "Run tests"
+alias = "t"
+depends = [":ensure-deps"]
+sources = ["src/**/*.py", "tests/**/*.py", "pytest.ini"]
+outputs = [".coverage", ".pytest_cache"]
+run = "pytest"
+
+[tasks.test-watch]
+description = "Run tests in watch mode"
+alias = "tw"
+depends = [":ensure-deps"]
+run = "pytest-watch"
+
+[tasks.test-verbose]
+description = "Run tests with verbose output"
+alias = "tv"
+depends = [":ensure-deps"]
+run = "pytest -vv"
+
+[tasks.test-coverage]
+description = "Run tests with coverage report"
+alias = "tc"
+depends = [":ensure-deps"]
+run = '''
+pytest --cov=src --cov-report=html --cov-report=term
+
+echo ""
+echo "Coverage report: ./htmlcov/index.html"
+'''
+
+[tasks.test-file]
+description = "Run specific test file"
+usage = '''
+arg "<file>" help="Test file to run"
+'''
+depends = [":ensure-deps"]
+run = 'pytest -vv "$usage_file"'
+
+[tasks.test-marker]
+description = "Run tests with specific marker"
+usage = '''
+flag "--marker <marker>" help="Pytest marker" default="unit"
+'''
+depends = [":ensure-deps"]
+run = 'pytest -m "$usage_marker"'
+
+[tasks.lint]
+description = "Lint Python code with ruff"
+alias = "l"
+run = "ruff check ."
+
+[tasks.lint-fix]
+description = "Lint and auto-fix issues"
+alias = "lf"
+run = "ruff check --fix ."
+
+[tasks.format]
+description = "Format code with ruff"
+alias = "f"
+run = "ruff format ."
+
+[tasks.format-check]
+description = "Check code formatting"
+run = "ruff format --check ."
+
+[tasks.typecheck]
+description = "Type check with mypy"
+alias = "tc"
+depends = [":ensure-deps"]
+run = '''
+echo "🔍 Type checking backend..."
+mypy src
+echo "✅ Type check passed!"
+'''
+
+[tasks.clean]
+description = "Clean build artifacts and caches"
+run = '''
+echo "🧹 Cleaning backend..."
+rm -rf dist build *.egg-info .coverage .pytest_cache htmlcov .mypy_cache .ruff_cache
+find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+echo "✅ Backend cleaned!"
+'''
+
+[tasks.clean-all]
+description = "Deep clean including virtual environment"
+run = '''
+mise run clean
+rm -rf .venv uv.lock
+echo "✅ Backend deep cleaned!"
+'''
+
+# =============================================================================
+# DATABASE TASKS
+# =============================================================================
+
+[tasks.db-migrate]
+description = "Run database migrations"
+depends = [":ensure-deps"]
+run = "alembic upgrade head"
+
+[tasks.db-migrate-create]
+description = "Create new migration"
+usage = '''
+arg "<message>" help="Migration message"
+'''
+depends = [":ensure-deps"]
+run = 'alembic revision --autogenerate -m "$usage_message"'
+
+[tasks.db-rollback]
+description = "Rollback last migration"
+depends = [":ensure-deps"]
+run = "alembic downgrade -1"
+
+[tasks.db-reset]
+description = "Reset database (WARNING: destructive)"
+depends = [":ensure-deps"]
+run = '''
+read -p "⚠️  This will delete all data. Continue? (y/N) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  alembic downgrade base
+  alembic upgrade head
+  echo "✅ Database reset complete"
+fi
+'''
+
+[tasks.db-seed]
+description = "Seed database with test data"
+depends = [":ensure-deps"]
+run = "python scripts/seed_db.py"
+
+# =============================================================================
+# DEVELOPMENT HELPERS
+# =============================================================================
+
+[tasks.shell]
+description = "Start Python REPL with app context"
+depends = [":ensure-deps"]
+run = "python -i scripts/shell.py"
+
+[tasks.routes]
+description = "List all API routes"
+depends = [":ensure-deps"]
+run = "python scripts/list_routes.py"
+
+[tasks.openapi]
+description = "Generate OpenAPI schema"
+depends = [":ensure-deps"]
+run = '''
+python -c "from main import app; import json; print(json.dumps(app.openapi(), indent=2))" > openapi.json
+echo "✅ OpenAPI schema saved to openapi.json"
+'''
+
+[tasks.upgrade]
+description = "Check for dependency updates"
+run = "uv pip list --outdated"
+
+[tasks.upgrade-deps]
+description = "Upgrade all dependencies"
+run = '''
+uv lock --upgrade
+uv sync
+echo "✅ Dependencies upgraded"
+'''
+
+# =============================================================================
+# QUALITY CHECKS
+# =============================================================================
+
+[tasks.check]
+description = "Run all quality checks (lint, typecheck, test)"
+alias = "c"
+run = [
+  "echo '🔍 Running all backend checks...'",
+  "mise run lint",
+  "mise run typecheck",
+  "mise run test",
+  "echo '✅ All checks passed!'"
+]
+
+[tasks.ci]
+description = "CI-specific checks"
+env = { CI = "true", APP_ENV = "production" }
+run = [
+  "mise run install",
+  "mise run lint",
+  "mise run typecheck",
+  "mise run test --coverage",
+  "mise run build"
+]
+
+# =============================================================================
+# SECURITY
+# =============================================================================
+
+[tasks.security-check]
+description = "Run security vulnerability scan"
+depends = [":ensure-deps"]
+run = "uv pip check"
+
+[tasks.security-audit]
+description = "Audit dependencies for known vulnerabilities"
+run = "pip-audit"
+
+# =============================================================================
+# DEBUGGING
+# =============================================================================
+
+[tasks.debug]
+description = "Start server with debugger"
+depends = [":ensure-deps"]
+run = "python -m debugpy --listen 5678 --wait-for-client -m uvicorn main:app --reload"
+
+[tasks.debug-test]
+description = "Debug specific test"
+usage = '''
+arg "<test>" help="Test to debug (file::test_name)"
+'''
+depends = [":ensure-deps"]
+run = 'python -m pytest --pdb "$usage_test"'
+
+[tasks.profile]
+description = "Profile API endpoint performance"
+usage = '''
+arg "<endpoint>" help="Endpoint to profile (e.g., /users)"
+'''
+depends = [":ensure-deps"]
+run = 'python scripts/profile.py "$usage_endpoint"'

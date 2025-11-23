@@ -1,0 +1,398 @@
+# Mise Task Arguments - Edge Cases and Potential Bugs
+# This file explores corner cases and potential issues
+
+# =============================================================================
+# EDGE CASE 1: Special Characters in Arguments
+# =============================================================================
+# Testing: mise run edge:special-chars -- "test with spaces.py" "test-with-dashes.py"
+# Potential bug: Shell escaping issues with special characters in variadic args
+[tasks."edge:special-chars"]
+description = "Test handling of special characters in file paths"
+usage = '''
+arg "[paths...]" help="Test paths with special characters" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+set -x  # Debug mode to see how args are expanded
+echo "Received paths: $usage_paths"
+# This might fail if paths have spaces and aren't properly quoted
+pytest "$usage_paths"
+'''
+
+# =============================================================================
+# EDGE CASE 2: Empty String vs Undefined
+# =============================================================================
+# Testing default value handling
+# Potential bug: Empty string vs undefined/null distinction
+[tasks."edge:empty-vs-undefined"]
+description = "Test empty string vs undefined behavior"
+usage = '''
+flag "--name <name>" help="Optional name" default=""
+arg "[path]" help="Optional path"
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Name value: '$usage_name'"
+echo "Name is set: ${usage_name+set}"
+echo "Path value: '$usage_path'"
+echo "Path is set: ${usage_path+set}"
+# Check if we can distinguish between "" and unset
+if [ -z "$usage_name" ]; then
+  echo "Name is empty or unset"
+fi
+if [ -z "$usage_path" ]; then
+  echo "Path is empty or unset"
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 3: Variadic Args with No Values
+# =============================================================================
+# Testing: mise run edge:variadic-empty
+# Potential bug: How does var=#true behave when no args provided?
+[tasks."edge:variadic-empty"]
+description = "Test variadic arguments with no values"
+usage = '''
+arg "[files...]" help="Optional files" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Files: '$usage_files'"
+if [ -z "$usage_files" ]; then
+  echo "No files provided - running all tests"
+  pytest tests/
+else
+  echo "Running specific files"
+  pytest $usage_files
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 4: Conflicting Flags
+# =============================================================================
+# Testing: mise run edge:conflicts --verbose --quiet
+# Potential bug: What happens when conflicting flags are both set?
+[tasks."edge:conflicts"]
+description = "Test conflicting flag behavior"
+usage = '''
+flag "--verbose" help="Verbose output" default=#false
+flag "--quiet" help="Quiet output" overrides="--verbose" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Verbose: $usage_verbose"
+echo "Quiet: $usage_quiet"
+# Overrides should make verbose=false when quiet is set
+if [ "$usage_quiet" = "true" ]; then
+  pytest -q
+elif [ "$usage_verbose" = "true" ]; then
+  pytest -vvv
+else
+  pytest -v
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 5: Choice Validation Timing
+# =============================================================================
+# Testing: mise run edge:choice-validation --env invalid
+# Potential bug: Are choices validated before or after default substitution?
+[tasks."edge:choice-validation"]
+description = "Test when choice validation occurs"
+usage = '''
+flag "--env <env>" help="Environment" default="local" {
+  choices "local" "staging" "prod"
+}
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Environment: $usage_env"
+export TEST_ENV=$usage_env
+pytest
+'''
+
+# =============================================================================
+# EDGE CASE 6: Required Flag Not Provided
+# =============================================================================
+# Testing: mise run edge:required-missing
+# Expected: Should error before running the script
+[tasks."edge:required-missing"]
+description = "Test required flag behavior"
+usage = '''
+flag "--config <path>" help="Config file path" required=#true
+'''
+run = '''
+#!/usr/bin/env bash
+echo "This should not run if --config is missing"
+pytest --config=$usage_config
+'''
+
+# =============================================================================
+# EDGE CASE 7: Nested Environment Variable Expansion
+# =============================================================================
+# Testing: HOME=/tmp mise run edge:env-expansion
+# Potential bug: Are env vars expanded in usage env= field?
+[tasks."edge:env-expansion"]
+description = "Test environment variable expansion"
+usage = '''
+flag "--home <path>" help="Home directory" env="HOME"
+flag "--custom <val>" help="Custom value" env="MY_CUSTOM_VAR" default="fallback"
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Home: $usage_home"
+echo "Custom: $usage_custom"
+echo "Actual HOME: $HOME"
+'''
+
+# =============================================================================
+# EDGE CASE 8: Boolean String Comparison
+# =============================================================================
+# Testing various boolean representations
+# Potential bug: Are booleans "true"/"false" strings or actual booleans?
+[tasks."edge:boolean-types"]
+description = "Test boolean value types"
+usage = '''
+flag "--enable" help="Enable feature" default=#true
+flag "--disable" help="Disable feature" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+# Test different comparison methods
+if [ "$usage_enable" = "true" ]; then
+  echo "String comparison works for enable"
+fi
+if [ "$usage_enable" == "true" ]; then
+  echo "== also works for enable"
+fi
+if $usage_enable; then
+  echo "Direct boolean expansion works for enable"
+fi
+
+if [ "$usage_disable" = "false" ]; then
+  echo "String comparison works for disable"
+fi
+if ! $usage_disable; then
+  echo "Negated boolean expansion works for disable"
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 9: Count Flag Edge Cases
+# =============================================================================
+# Testing: mise run edge:count-edge (no -v), mise run edge:count-edge -vvvvv
+# Potential bug: What's the max count? Integer overflow?
+[tasks."edge:count-edge"]
+description = "Test counting flag edge cases"
+usage = '''
+flag "-v --verbose" help="Verbosity" count=#true
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Verbose count: $usage_verbose"
+echo "Type check: $(type $usage_verbose 2>&1 || echo 'not a number')"
+# What happens with count=0?
+if [ "$usage_verbose" -eq 0 ]; then
+  echo "Zero verbosity"
+elif [ "$usage_verbose" -gt 3 ]; then
+  echo "Very verbose (count > 3)"
+else
+  echo "Normal verbosity"
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 10: Negate Flag Default Behavior
+# =============================================================================
+# Testing: mise run edge:negate-default vs mise run edge:negate-default --no-cache
+# Potential bug: Does negate properly flip the default?
+[tasks."edge:negate-default"]
+description = "Test negatable flag with default=true"
+usage = '''
+flag "--cache" help="Enable cache" negate="--no-cache" default=#true
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Cache enabled: $usage_cache"
+if [ "$usage_cache" = "true" ]; then
+  pytest
+else
+  pytest --cache-clear
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 11: Multiple Run Commands - Variable Scope
+# =============================================================================
+# Testing if variables persist across run array elements
+# Potential bug: Are usage variables available in all run commands?
+[tasks."edge:multi-run-scope"]
+description = "Test variable scope across multiple run commands"
+usage = '''
+flag "--value <val>" help="Test value" default="default"
+'''
+run = [
+  "echo 'First command, value:' $usage_value",
+  "export MODIFIED_VALUE=${usage_value}_modified",
+  "echo 'Second command, value:' $usage_value",
+  "echo 'Second command, modified:' $MODIFIED_VALUE",
+  '''
+  # Third command in different shell context?
+  echo "Third command, value: $usage_value"
+  echo "Third command, modified: $MODIFIED_VALUE"
+  '''
+]
+
+# =============================================================================
+# EDGE CASE 12: Arg vs Flag Name Collision
+# =============================================================================
+# Testing: mise run edge:name-collision --path /tmp -- /home/user
+# Potential bug: What if arg and flag have same variable name?
+[tasks."edge:name-collision"]
+description = "Test arg and flag with same semantic name"
+usage = '''
+flag "--path <path>" help="Path via flag"
+arg "[path]" help="Path via argument"
+'''
+run = '''
+#!/usr/bin/env bash
+# How does mise handle this? Both become $usage_path?
+echo "Path value: $usage_path"
+# This is likely a bug/undefined behavior
+'''
+
+# =============================================================================
+# EDGE CASE 13: Min/Max Validation
+# =============================================================================
+# Testing: mise run edge:minmax file1.py (should fail, needs 2+)
+# Testing: mise run edge:minmax f1.py f2.py f3.py f4.py f5.py f6.py (should fail, max 5)
+[tasks."edge:minmax"]
+description = "Test var_min and var_max validation"
+usage = '''
+arg "<files...>" help="Test files (2-5 required)" var=#true var_min=2 var_max=5
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Files: $usage_files"
+echo "File count: $(echo $usage_files | wc -w)"
+pytest $usage_files
+'''
+
+# =============================================================================
+# EDGE CASE 14: Long Help Text Rendering
+# =============================================================================
+[tasks."edge:long-help"]
+description = "Test long help text rendering"
+usage = '''
+flag "--option <val>" help="Short help" long_help="This is a much longer help text that spans multiple lines and provides extensive documentation about what this option does, how it should be used, and what values are acceptable. It might even include examples or warnings."
+'''
+run = "echo 'Option:' $usage_option"
+
+# =============================================================================
+# EDGE CASE 15: Unicode and Non-ASCII Characters
+# =============================================================================
+# Testing: mise run edge:unicode --name "José" -- "tests/测试.py"
+# Potential bug: UTF-8 handling in arguments
+[tasks."edge:unicode"]
+description = "Test Unicode character handling"
+usage = '''
+flag "--name <name>" help="Name with potential Unicode" default="Test"
+arg "[paths...]" help="Paths with potential Unicode" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Name: $usage_name"
+echo "Paths: $usage_paths"
+# Check if UTF-8 is preserved
+echo "Name length: ${#usage_name}"
+'''
+
+# =============================================================================
+# EDGE CASE 16: Shell Injection Protection
+# =============================================================================
+# Testing: mise run edge:injection --cmd "; rm -rf /"
+# Security test: Does mise properly escape/sanitize inputs?
+[tasks."edge:injection"]
+description = "Test shell injection protection (DO NOT RUN WITH MALICIOUS INPUT)"
+usage = '''
+flag "--cmd <command>" help="Command to execute" default="echo safe"
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Received command: $usage_cmd"
+# This is intentionally dangerous - testing if mise sanitizes
+# NEVER actually run: eval "$usage_cmd"
+echo "For safety, not executing the command"
+echo "Would have run: $usage_cmd"
+'''
+
+# =============================================================================
+# EDGE CASE 17: Double Dash Argument Separation
+# =============================================================================
+# Testing: mise run edge:double-dash --flag value -- arg1 arg2
+# Potential bug: How are args before/after -- handled?
+[tasks."edge:double-dash"]
+description = "Test double-dash argument separation"
+usage = '''
+flag "--flag <val>" help="Flag before --"
+arg "[args...]" help="Args after --" var=#true
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Flag: $usage_flag"
+echo "Args: $usage_args"
+'''
+
+# =============================================================================
+# EDGE CASE 18: Whitespace in Default Values
+# =============================================================================
+[tasks."edge:whitespace-default"]
+description = "Test whitespace handling in defaults"
+usage = '''
+flag "--value <val>" help="Value with spaces" default="hello world"
+arg "[path]" help="Path" default="  spaced  "
+'''
+run = '''
+#!/usr/bin/env bash
+echo "Value: '$usage_value'"
+echo "Path: '$usage_path'"
+'''
+
+# =============================================================================
+# EDGE CASE 19: Required Unless/If Combinations
+# =============================================================================
+# Testing: mise run edge:required-combo --stdin (should work)
+# Testing: mise run edge:required-combo (should fail - needs --file or --stdin)
+[tasks."edge:required-combo"]
+description = "Test required_unless and required_if logic"
+usage = '''
+flag "--file <path>" help="Input file" required_unless="--stdin"
+flag "--stdin" help="Read from stdin" required_unless="--file" default=#false
+'''
+run = '''
+#!/usr/bin/env bash
+if [ "$usage_stdin" = "true" ]; then
+  echo "Reading from stdin"
+else
+  echo "Reading from file: $usage_file"
+fi
+'''
+
+# =============================================================================
+# EDGE CASE 20: Task Dependencies with Arguments
+# =============================================================================
+# Testing if arguments work with task dependencies
+[tasks."edge:dep-target"]
+description = "Target task for dependency testing"
+usage = '''
+flag "--value <val>" help="Test value" default="dep"
+'''
+run = "echo 'Dependency task, value:' $usage_value"
+
+[tasks."edge:dep-caller"]
+description = "Caller task that depends on another"
+depends = ["edge:dep-target"]
+usage = '''
+flag "--value <val>" help="Test value" default="caller"
+'''
+run = "echo 'Caller task, value:' $usage_value"
