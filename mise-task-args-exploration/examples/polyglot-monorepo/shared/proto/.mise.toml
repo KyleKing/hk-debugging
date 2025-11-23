@@ -1,0 +1,120 @@
+# Shared Protobuf Definitions
+# Generates code for both Python and TypeScript
+
+# =============================================================================
+# TOOLS
+# =============================================================================
+
+[tools]
+# Protobuf compiler
+"cargo:protoc" = "latest"
+
+# Language-specific generators
+"npm:@bufbuild/protoc-gen-es" = "latest"   # TypeScript/JavaScript
+"pipx:grpcio-tools" = "latest"              # Python
+
+# =============================================================================
+# CODE GENERATION TASKS
+# =============================================================================
+
+[tasks.generate]
+description = "Generate code from .proto files for all languages"
+alias = "g"
+sources = ["*.proto"]
+outputs = [
+  "../../backend/src/generated/**/*.py",
+  "../../frontend/src/generated/**/*.ts"
+]
+run = '''
+#!/usr/bin/env bash
+set -e
+
+echo "🔄 Generating code from protobuf definitions..."
+
+# Create output directories
+mkdir -p ../../backend/src/generated
+mkdir -p ../../frontend/src/generated
+
+# Generate Python code
+echo "  📝 Generating Python..."
+python -m grpc_tools.protoc \
+  --proto_path=. \
+  --python_out=../../backend/src/generated \
+  --grpc_python_out=../../backend/src/generated \
+  *.proto
+
+# Generate TypeScript code
+echo "  📝 Generating TypeScript..."
+protoc \
+  --proto_path=. \
+  --es_out=../../frontend/src/generated \
+  --es_opt=target=ts \
+  *.proto
+
+echo "✅ Code generation complete!"
+echo ""
+echo "Generated files:"
+echo "  Backend:  backend/src/generated/"
+echo "  Frontend: frontend/src/generated/"
+'''
+
+[tasks.generate-python]
+description = "Generate Python code only"
+sources = ["*.proto"]
+outputs = ["../../backend/src/generated/**/*.py"]
+run = '''
+echo "📝 Generating Python code..."
+mkdir -p ../../backend/src/generated
+python -m grpc_tools.protoc \
+  --proto_path=. \
+  --python_out=../../backend/src/generated \
+  --grpc_python_out=../../backend/src/generated \
+  *.proto
+echo "✅ Python code generated"
+'''
+
+[tasks.generate-typescript]
+description = "Generate TypeScript code only"
+sources = ["*.proto"]
+outputs = ["../../frontend/src/generated/**/*.ts"]
+run = '''
+echo "📝 Generating TypeScript code..."
+mkdir -p ../../frontend/src/generated
+protoc \
+  --proto_path=. \
+  --es_out=../../frontend/src/generated \
+  --es_opt=target=ts \
+  *.proto
+echo "✅ TypeScript code generated"
+'''
+
+[tasks.validate]
+description = "Validate .proto files"
+run = '''
+echo "🔍 Validating protobuf definitions..."
+for file in *.proto; do
+  echo "  Checking $file..."
+  protoc --proto_path=. --descriptor_set_out=/dev/null "$file"
+done
+echo "✅ All .proto files valid"
+'''
+
+[tasks.clean]
+description = "Clean generated code"
+run = '''
+echo "🧹 Cleaning generated code..."
+rm -rf ../../backend/src/generated
+rm -rf ../../frontend/src/generated
+echo "✅ Cleaned"
+'''
+
+[tasks.watch]
+description = "Watch .proto files and regenerate on change"
+run = '''
+echo "👀 Watching .proto files for changes..."
+echo "Press Ctrl+C to stop"
+
+while true; do
+  inotifywait -e modify,create,delete *.proto 2>/dev/null && mise run generate
+done
+'''

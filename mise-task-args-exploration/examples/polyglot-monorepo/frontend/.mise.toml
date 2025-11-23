@@ -1,0 +1,256 @@
+# Frontend Configuration (TypeScript + React)
+# Part of Polyglot Monorepo Example
+
+# =============================================================================
+# TOOLS
+# =============================================================================
+
+[tools]
+# Node.js inherited from root (20.11.0)
+# Override if this project needs a different version:
+# node = "22.0.0"
+
+# Frontend-specific tools
+"npm:pnpm" = "latest"           # Fast package manager
+"npm:typescript" = "5.3"        # TypeScript compiler
+"npm:vite" = "latest"           # Build tool
+"npm:eslint" = "latest"         # Linter
+
+# =============================================================================
+# ENVIRONMENT VARIABLES
+# =============================================================================
+
+[env]
+# Node environment
+NODE_ENV = "development"
+
+# API configuration
+VITE_API_URL = "${VITE_API_URL:-http://localhost:8000}"
+VITE_API_TIMEOUT = "30000"
+
+# Build configuration
+VITE_APP_VERSION = "{{exec(command='git describe --tags --always 2>/dev/null || echo v0.0.0')}}"
+
+# Path configuration
+PATH = ["{{config_root}}/node_modules/.bin", "$PATH"]
+NODE_PATH = "{{config_root}}/node_modules"
+
+# =============================================================================
+# HIDDEN HELPER TASKS
+# =============================================================================
+
+[tasks.":ensure-deps"]
+description = "Ensure dependencies are installed (internal)"
+hide = true
+sources = ["package.json", "pnpm-lock.yaml"]
+outputs = ["node_modules/.pnpm"]
+run = '''
+if [ ! -d "node_modules" ] || [ package.json -nt node_modules ]; then
+  echo "📦 Installing frontend dependencies..."
+  pnpm install --frozen-lockfile
+else
+  echo "✅ Frontend dependencies up to date"
+fi
+'''
+
+[tasks.":proto-sync"]
+description = "Sync generated protobuf code (internal)"
+hide = true
+depends = ["//shared/proto:generate"]
+run = "echo '✅ Protobuf definitions synced'"
+
+# =============================================================================
+# PUBLIC TASKS
+# =============================================================================
+
+[tasks.install]
+description = "Install frontend dependencies"
+alias = "i"
+sources = ["package.json", "pnpm-lock.yaml"]
+outputs = ["node_modules/.pnpm"]
+run = "pnpm install --frozen-lockfile"
+
+[tasks.dev]
+description = "Start development server with hot reload"
+alias = "d"
+depends = [":ensure-deps", ":proto-sync"]
+run = '''
+echo "🚀 Starting frontend dev server..."
+echo "   URL: http://localhost:5173"
+echo "   API: ${VITE_API_URL}"
+echo ""
+pnpm dev
+'''
+
+[tasks.build]
+description = "Build for production"
+alias = "b"
+depends = [":ensure-deps", ":proto-sync"]
+sources = [
+  "src/**/*",
+  "index.html",
+  "tsconfig.json",
+  "vite.config.ts"
+]
+outputs = ["dist/**/*"]
+run = '''
+echo "🏗️  Building frontend for production..."
+pnpm build
+
+echo ""
+echo "Build complete:"
+du -sh dist
+ls -lh dist/
+'''
+
+[tasks.build-watch]
+description = "Build in watch mode"
+depends = [":ensure-deps"]
+run = "tsc --watch"
+
+[tasks.preview]
+description = "Preview production build locally"
+depends = ["build"]
+run = '''
+echo "👀 Starting preview server..."
+echo "   URL: http://localhost:4173"
+pnpm preview
+'''
+
+[tasks.test]
+description = "Run tests"
+alias = "t"
+depends = [":ensure-deps"]
+sources = ["src/**/*", "tests/**/*", "vitest.config.ts"]
+outputs = [".coverage"]
+run = "pnpm test"
+
+[tasks.test-watch]
+description = "Run tests in watch mode"
+alias = "tw"
+depends = [":ensure-deps"]
+run = "pnpm test --watch"
+
+[tasks.test-ui]
+description = "Run tests with UI"
+depends = [":ensure-deps"]
+run = "pnpm test --ui"
+
+[tasks.test-coverage]
+description = "Run tests with coverage report"
+alias = "tc"
+depends = [":ensure-deps"]
+run = '''
+pnpm test --coverage
+echo ""
+echo "Coverage report: ./coverage/index.html"
+'''
+
+[tasks.lint]
+description = "Lint TypeScript code"
+alias = "l"
+run = "eslint . --ext .ts,.tsx"
+
+[tasks.lint-fix]
+description = "Lint and auto-fix issues"
+alias = "lf"
+run = "eslint . --ext .ts,.tsx --fix"
+
+[tasks.format]
+description = "Format code with Prettier"
+alias = "f"
+run = "prettier --write \"src/**/*.{ts,tsx,css,md}\""
+
+[tasks.format-check]
+description = "Check code formatting"
+run = "prettier --check \"src/**/*.{ts,tsx,css,md}\""
+
+[tasks.typecheck]
+description = "Type check without emitting files"
+alias = "tc"
+depends = [":ensure-deps"]
+run = '''
+echo "🔍 Type checking frontend..."
+tsc --noEmit
+echo "✅ Type check passed!"
+'''
+
+[tasks.clean]
+description = "Clean build artifacts and caches"
+run = '''
+echo "🧹 Cleaning frontend..."
+rm -rf dist .cache coverage node_modules/.vite
+echo "✅ Frontend cleaned!"
+'''
+
+[tasks.clean-all]
+description = "Deep clean including dependencies"
+run = '''
+mise run clean
+rm -rf node_modules pnpm-lock.yaml
+echo "✅ Frontend deep cleaned!"
+'''
+
+# =============================================================================
+# DEVELOPMENT HELPERS
+# =============================================================================
+
+[tasks.analyze]
+description = "Analyze bundle size"
+depends = ["build"]
+run = '''
+echo "📊 Bundle analysis:"
+echo ""
+pnpm vite-bundle-visualizer
+'''
+
+[tasks.upgrade]
+description = "Check for dependency updates"
+run = "pnpm outdated"
+
+[tasks.upgrade-interactive]
+description = "Interactively upgrade dependencies"
+run = "pnpm update --interactive --latest"
+
+# =============================================================================
+# QUALITY CHECKS
+# =============================================================================
+
+[tasks.check]
+description = "Run all quality checks (lint, typecheck, test)"
+alias = "c"
+run = [
+  "echo '🔍 Running all frontend checks...'",
+  "mise run lint",
+  "mise run typecheck",
+  "mise run test",
+  "echo '✅ All checks passed!'"
+]
+
+[tasks.ci]
+description = "CI-specific checks"
+env = { CI = "true", NODE_ENV = "production" }
+run = [
+  "mise run install",
+  "mise run lint",
+  "mise run typecheck",
+  "mise run test --coverage",
+  "mise run build"
+]
+
+# =============================================================================
+# DEBUGGING
+# =============================================================================
+
+[tasks.debug]
+description = "Start dev server with debugging enabled"
+depends = [":ensure-deps"]
+run = "node --inspect-brk ./node_modules/.bin/vite"
+
+[tasks.debug-test]
+description = "Debug specific test file"
+usage = '''
+arg "<file>" help="Test file to debug"
+'''
+depends = [":ensure-deps"]
+run = 'node --inspect-brk ./node_modules/.bin/vitest run "$usage_file"'

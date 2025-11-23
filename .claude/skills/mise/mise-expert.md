@@ -1123,6 +1123,136 @@ mise list
 mise install
 ```
 
+### 12. Best Practices & Patterns
+
+Reference comprehensive best practices documentation for real-world mise usage.
+
+#### Task Organization Best Practices
+
+**Use Hidden Helper Tasks:**
+```toml
+[tasks.":ensure-deps"]
+hide = true
+sources = ["package.json", "pnpm-lock.yaml"]
+outputs = ["node_modules/.pnpm"]
+run = "pnpm install"
+
+[tasks.dev]
+depends = [":ensure-deps"]
+run = "pnpm dev"
+```
+
+**Why:** Keeps task listings clean, enables reuse, clear separation of concerns
+
+**Source/Output Tracking:**
+```toml
+[tasks.build]
+sources = ["src/**/*.ts", "package.json", "tsconfig.json"]
+outputs = ["dist/**/*"]
+run = "tsc"
+```
+
+**Why:** Intelligent caching, skip unchanged builds, faster development
+
+**Consistent Naming Across Projects:**
+Every project should have: `dev`, `build`, `test`, `lint`, `format`, `clean`, `typecheck`, `ci`
+
+**Why:** Enables `mise //...:test`, predictable interface, simple CI/CD
+
+#### Multi-Language Integration Patterns
+
+**Python + TypeScript Monorepo:**
+- Use per-project tool isolation
+- Shared code generation (protobuf)
+- Cross-project dependencies
+- Parallel execution for independent tasks
+
+**Environment Isolation:**
+```toml
+# Python
+[env]
+VIRTUAL_ENV = "{{config_root}}/.venv"
+PATH = ["{{config_root}}/.venv/bin", "$PATH"]
+
+# Node.js
+[env]
+PATH = ["{{config_root}}/node_modules/.bin", "$PATH"]
+
+# Ruby
+[env]
+GEM_HOME = "{{config_root}}/.gem"
+PATH = ["{{config_root}}/.gem/bin", "$PATH"]
+```
+
+#### Template Variable Patterns
+
+```toml
+[env]
+# Project paths
+PROJECT_ROOT = "{{config_root}}"
+BUILD_DIR = "{{config_root}}/dist"
+
+# Dynamic execution
+GIT_BRANCH = "{{exec(command='git branch --show-current')}}"
+VERSION = "{{exec(command='git describe --tags --always')}}"
+
+# Environment-specific
+API_URL = "${API_URL:-http://localhost:3000}"
+```
+
+#### Hook Automation
+
+```toml
+[hooks]
+enter = '''
+# Auto-setup
+mkdir -p .cache logs .tmp
+
+# First-time setup
+if [ ! -f .setup-complete ]; then
+  mise run install
+  touch .setup-complete
+fi
+
+# Create aliases
+alias mt="mise run test"
+alias mb="mise run build"
+alias md="mise run dev"
+'''
+```
+
+#### CI/CD Optimization
+
+```toml
+[tasks.ci]
+env = { CI = "true" }
+run = [
+  "mise run install-all",
+  "mise run lint-all",      # Can run in parallel
+  "mise run typecheck-all",  # Can run in parallel
+  "mise run test-all",
+  "mise run build-all"
+]
+```
+
+#### Common Anti-Patterns to Avoid
+
+❌ Global tool installation (use mise per-project)
+❌ Repeat dependency installation in every task
+❌ Hard-code paths (use template variables)
+❌ Monolithic tasks (compose small, focused tasks)
+❌ Missing documentation (always add descriptions)
+
+✅ Per-project tool versions with mise
+✅ Hidden helper tasks with source/output tracking
+✅ Template variables and env configs
+✅ Small tasks with clear dependencies
+✅ Comprehensive documentation
+
+For complete best practices, see:
+- [Best Practices Guide](../mise-task-args-exploration/BEST-PRACTICES.md)
+- [Polyglot Monorepo Example](../mise-task-args-exploration/examples/polyglot-monorepo/)
+
 ## When to Use This Skill
 
 Activate this skill when users:
@@ -1138,16 +1268,29 @@ Activate this skill when users:
 - Need help with the usage specification (KDL syntax)
 - Want to set up cross-project dependencies
 - Ask about task discovery and organization
+- Need best practices for organizing polyglot monorepos
+- Want to optimize CI/CD pipelines with mise
+- Ask about caching strategies and performance
 
 ## Resources
 
+### Official Documentation
 - [Mise Documentation](https://mise.jdx.dev)
 - [Task Arguments](https://mise.jdx.dev/tasks/task-arguments.html)
 - [TOML Tasks](https://mise.jdx.dev/tasks/toml-tasks.html)
 - [Usage Specification](https://usage.jdx.dev)
 - [Usage Spec Reference](https://usage.jdx.dev/spec)
 - [Usage GitHub](https://github.com/jdx/usage)
+
+### Community & Examples
 - [Monorepo Discussion](https://github.com/jdx/mise/discussions/6564)
+- [Task Cookbook](https://github.com/jdx/mise/discussions/3645)
+- [Best Practices Guide](../mise-task-args-exploration/BEST-PRACTICES.md)
+- [Polyglot Monorepo Example](../mise-task-args-exploration/examples/polyglot-monorepo/)
+
+### Related Tools
+- [Monorepo Tools Comparison](https://www.aviator.co/blog/monorepo-tools/)
+- [TypeScript Monorepo Setup](https://earthly.dev/blog/setup-typescript-monorepo/)
 
 ## Interaction Guidelines
 
