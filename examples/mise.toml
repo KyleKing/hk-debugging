@@ -1,0 +1,72 @@
+# Sample mise.toml configuration
+# This file demonstrates a typical multi-tool setup
+# Use with MISE_ENABLE_TOOLS or MISE_DISABLE_TOOLS to selectively install tools in CI
+
+[tools]
+# Programming languages
+python = "3.12"
+node = "20"
+go = "1.21"
+rust = "1.75"
+
+# Cloud/Infrastructure tools
+terraform = "1.5"
+kubectl = "1.28"
+helm = "3.12"
+
+# Container tools
+docker = "latest"
+
+# CLI utilities
+jq = "1.7"
+yq = "4.35"
+
+# Development tools
+shellcheck = "0.9.0"
+shfmt = "3.7.0"
+
+[env]
+# Environment variables available when mise is activated
+NODE_ENV = "development"
+PYTHONPATH = "."
+
+# Example: Different settings per environment (optional)
+# _.file = ".env"
+# _.path = ["./bin", "$PATH"]
+
+[tasks]
+# Task definitions
+test = "pytest tests/"
+lint = { run = "npm run lint && shellcheck **.sh", description = "Run all linters" }
+build = { run = "npm run build", depends = ["lint", "test"] }
+integration = { run = "./integration-tests.sh", description = "Run integration tests" }
+
+[tasks.ci]
+description = "Run CI checks"
+run = """
+npm run lint
+pytest
+npm test
+"""
+
+# Example task with dependencies
+[tasks.deploy]
+description = "Deploy application"
+depends = ["build", "test"]
+run = "./deploy.sh"
+
+# Example: Environment-specific configuration (optional, but not recommended for CI)
+# [env.ci]
+# NODE_ENV = "production"
+# DEBUG = "false"
+
+# Example: Settings
+[settings]
+# Uncomment to disable specific tools globally
+# disable_tools = ["docker"]
+
+# Uncomment to auto-install tools when needed
+# auto_install = true
+
+# Uncomment to skip auto-install for specific tools
+# auto_install_disable_tools = ["terraform", "kubectl"]
